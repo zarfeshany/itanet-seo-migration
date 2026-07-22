@@ -1,0 +1,296 @@
+{
+    "ok": 25,
+    "fail": 1,
+    "total": 26,
+    "skipped": {
+        "home": "\/",
+        "ftth_exists": "\/ftth\/",
+        "app": "\/app\/profiles",
+        "fragments": "#blog*"
+    },
+    "results": [
+        {
+            "path": "\/prices\/",
+            "slug": "prices",
+            "source": "https:\/\/itanet.ir\/prices\/",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5358,
+            "link": "https:\/\/tastebox.ir\/prices\/",
+            "chars": 86
+        },
+        {
+            "path": "\/charging\/",
+            "slug": "charging",
+            "source": "https:\/\/itanet.ir\/charging\/",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5359,
+            "link": "https:\/\/tastebox.ir\/charging\/",
+            "chars": 438
+        },
+        {
+            "path": "\/contact\/",
+            "slug": "contact",
+            "source": "https:\/\/itanet.ir\/contact\/",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5360,
+            "link": "https:\/\/tastebox.ir\/contact\/",
+            "chars": 465
+        },
+        {
+            "path": "\/speed-test\/",
+            "slug": "speed-test",
+            "source": "https:\/\/itanet.ir\/speed-test\/",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5361,
+            "link": "https:\/\/tastebox.ir\/speed-test\/",
+            "chars": 5819
+        },
+        {
+            "path": "\/agentsservice\/",
+            "slug": "agentsservice",
+            "source": "https:\/\/itanet.ir\/agentsservice\/",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5362,
+            "link": "https:\/\/tastebox.ir\/agentsservice\/",
+            "chars": 931
+        },
+        {
+            "path": "\/lows\/",
+            "slug": "lows",
+            "source": "https:\/\/itanet.ir\/lows\/",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5363,
+            "link": "https:\/\/tastebox.ir\/lows\/",
+            "chars": 799
+        },
+        {
+            "path": "\/kh\/",
+            "slug": "kh",
+            "source": "https:\/\/itanet.ir\/kh\/",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5364,
+            "link": "https:\/\/tastebox.ir\/kh\/",
+            "chars": 976
+        },
+        {
+            "path": "\/2ghasemi",
+            "slug": "2ghasemi",
+            "source": "https:\/\/itanet.ir\/2ghasemi",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5365,
+            "link": "https:\/\/tastebox.ir\/2ghasemi\/",
+            "chars": 88
+        },
+        {
+            "path": "\/shahin",
+            "slug": "shahin",
+            "source": "https:\/\/itanet.ir\/shahin",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5366,
+            "link": "https:\/\/tastebox.ir\/shahin\/",
+            "chars": 1300
+        },
+        {
+            "path": "\/shops\/",
+            "slug": "shops",
+            "source": "https:\/\/itanet.ir\/shops\/",
+            "http": 0,
+            "status": "fetch_failed",
+            "error": "Operation timed out after 45001 milliseconds with 0 bytes received"
+        },
+        {
+            "path": "\/blog\/کانفیگ-و-تنظیم-مودم-فیبر-نوری-هواوی\/",
+            "slug": "کانفیگ-و-تنظیم-مودم-فیبر-نوری-هواوی",
+            "source": "https:\/\/itanet.ir\/blog\/کانفیگ-و-تنظیم-مودم-فیبر-نوری-هواوی\/",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5367,
+            "link": "https:\/\/tastebox.ir\/blog\/%da%a9%d8%a7%d9%86%d9%81%db%8c%da%af-%d9%88-%d8%aa%d9%86%d8%b8%db%8c%d9%85-%d9%85%d9%88%d8%af%d9%85-%d9%81%db%8c%d8%a8%d8%b1-%d9%86%d9%88%d8%b1%db%8c-%d9%87%d9%88%d8%a7%d9%88%db%8c\/",
+            "chars": 14298
+        },
+        {
+            "path": "\/blog\/راهنمای-خرید-بسته-اینترنت-ایرانسل-در-اپلیکیشن-ایرانسل-من",
+            "slug": "راهنمای-خرید-بسته-اینترنت-ایرانسل-در-اپلیکیشن-ایرانسل-من",
+            "source": "https:\/\/itanet.ir\/blog\/راهنمای-خرید-بسته-اینترنت-ایرانسل-در-اپلیکیشن-ایرانسل-من",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5368,
+            "link": "https:\/\/tastebox.ir\/blog\/%d8%b1%d8%a7%d9%87%d9%86%d9%85%d8%a7%db%8c-%d8%ae%d8%b1%db%8c%d8%af-%d8%a8%d8%b3%d8%aa%d9%87-%d8%a7%db%8c%d9%86%d8%aa%d8%b1%d9%86%d8%aa-%d8%a7%db%8c%d8%b1%d8%a7%d9%86%d8%b3%d9%84-%d8%af%d8%b1-%d8%a7\/",
+            "chars": 7964
+        },
+        {
+            "path": "\/blog\/adsl",
+            "slug": "adsl",
+            "source": "https:\/\/itanet.ir\/blog\/adsl",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5369,
+            "link": "https:\/\/tastebox.ir\/blog\/adsl\/",
+            "chars": 12139
+        },
+        {
+            "path": "\/blog\/رانژه-کردن-خط-تلفن-چیست",
+            "slug": "رانژه-کردن-خط-تلفن-چیست",
+            "source": "https:\/\/itanet.ir\/blog\/رانژه-کردن-خط-تلفن-چیست",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5370,
+            "link": "https:\/\/tastebox.ir\/blog\/%d8%b1%d8%a7%d9%86%da%98%d9%87-%da%a9%d8%b1%d8%af%d9%86-%d8%ae%d8%b7-%d8%aa%d9%84%d9%81%d9%86-%da%86%db%8c%d8%b3%d8%aa\/",
+            "chars": 7381
+        },
+        {
+            "path": "\/blog\/wifi\/",
+            "slug": "wifi",
+            "source": "https:\/\/itanet.ir\/blog\/wifi\/",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5371,
+            "link": "https:\/\/tastebox.ir\/blog\/wifi\/",
+            "chars": 21904
+        },
+        {
+            "path": "\/blog\/راهنمای-جامع-شارژ-اینترنت-مخابرات-در-5-دقیقه",
+            "slug": "راهنمای-جامع-شارژ-اینترنت-مخابرات-در-5-دقیقه",
+            "source": "https:\/\/itanet.ir\/blog\/راهنمای-جامع-شارژ-اینترنت-مخابرات-در-5-دقیقه",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5372,
+            "link": "https:\/\/tastebox.ir\/blog\/%d8%b1%d8%a7%d9%87%d9%86%d9%85%d8%a7%db%8c-%d8%ac%d8%a7%d9%85%d8%b9-%d8%b4%d8%a7%d8%b1%da%98-%d8%a7%db%8c%d9%86%d8%aa%d8%b1%d9%86%d8%aa-%d9%85%d8%ae%d8%a7%d8%a8%d8%b1%d8%a7%d8%aa-%d8%af%d8%b1-5-%d8%af\/",
+            "chars": 7671
+        },
+        {
+            "path": "\/blog\/راهنمای-خرید-اینترنت-فیبر-نوری-مخابرات-اصفهان",
+            "slug": "راهنمای-خرید-اینترنت-فیبر-نوری-مخابرات-اصفهان",
+            "source": "https:\/\/itanet.ir\/blog\/راهنمای-خرید-اینترنت-فیبر-نوری-مخابرات-اصفهان",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5373,
+            "link": "https:\/\/tastebox.ir\/blog\/%d8%b1%d8%a7%d9%87%d9%86%d9%85%d8%a7%db%8c-%d8%ae%d8%b1%db%8c%d8%af-%d8%a7%db%8c%d9%86%d8%aa%d8%b1%d9%86%d8%aa-%d9%81%db%8c%d8%a8%d8%b1-%d9%86%d9%88%d8%b1%db%8c-%d9%85%d8%ae%d8%a7%d8%a8%d8%b1%d8%a7\/",
+            "chars": 12359
+        },
+        {
+            "path": "\/blog\/تفاوت-اینترنت-adsl-و-اینترنت-فیبر-نوری؛-کدام-را-انتخاب-کنیم\/",
+            "slug": "تفاوت-اینترنت-adsl-و-اینترنت-فیبر-نوری؛-کدام-را-انتخاب-کنیم",
+            "source": "https:\/\/itanet.ir\/blog\/تفاوت-اینترنت-adsl-و-اینترنت-فیبر-نوری؛-کدام-را-انتخاب-کنیم\/",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5374,
+            "link": "https:\/\/tastebox.ir\/blog\/%d8%aa%d9%81%d8%a7%d9%88%d8%aa-%d8%a7%db%8c%d9%86%d8%aa%d8%b1%d9%86%d8%aa-adsl-%d9%88-%d8%a7%db%8c%d9%86%d8%aa%d8%b1%d9%86%d8%aa-%d9%81%db%8c%d8%a8%d8%b1-%d9%86%d9%88%d8%b1%db%8c%d8%9b-%da%a9%d8%af\/",
+            "chars": 14389
+        },
+        {
+            "path": "\/blog\/انواع-مودم-فیبر-نوری--معرفی-بهترین-مدل-ها\/",
+            "slug": "انواع-مودم-فیبر-نوری--معرفی-بهترین-مدل-ها",
+            "source": "https:\/\/itanet.ir\/blog\/انواع-مودم-فیبر-نوری--معرفی-بهترین-مدل-ها\/",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5375,
+            "link": "https:\/\/tastebox.ir\/blog\/%d8%a7%d9%86%d9%88%d8%a7%d8%b9-%d9%85%d9%88%d8%af%d9%85-%d9%81%db%8c%d8%a8%d8%b1-%d9%86%d9%88%d8%b1%db%8c-%d9%85%d8%b9%d8%b1%d9%81%db%8c-%d8%a8%d9%87%d8%aa%d8%b1%db%8c%d9%86-%d9%85%d8%af%d9%84-%d9%87\/",
+            "chars": 12110
+        },
+        {
+            "path": "\/blog\/mac-address",
+            "slug": "mac-address",
+            "source": "https:\/\/itanet.ir\/blog\/mac-address",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5376,
+            "link": "https:\/\/tastebox.ir\/blog\/mac-address\/",
+            "chars": 12383
+        },
+        {
+            "path": "\/blog\/همه-چیز-درباره-رابطه-اینترنت-فیبر-نوری-و-اینترنت-اشیاء\/",
+            "slug": "همه-چیز-درباره-رابطه-اینترنت-فیبر-نوری-و-اینترنت-اشیاء",
+            "source": "https:\/\/itanet.ir\/blog\/همه-چیز-درباره-رابطه-اینترنت-فیبر-نوری-و-اینترنت-اشیاء\/",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5377,
+            "link": "https:\/\/tastebox.ir\/blog\/%d9%87%d9%85%d9%87-%da%86%db%8c%d8%b2-%d8%af%d8%b1%d8%a8%d8%a7%d8%b1%d9%87-%d8%b1%d8%a7%d8%a8%d8%b7%d9%87-%d8%a7%db%8c%d9%86%d8%aa%d8%b1%d9%86%d8%aa-%d9%81%db%8c%d8%a8%d8%b1-%d9%86%d9%88%d8%b1%db%8c\/",
+            "chars": 12509
+        },
+        {
+            "path": "\/blog\/اینترنت-5g",
+            "slug": "اینترنت-5g",
+            "source": "https:\/\/itanet.ir\/blog\/اینترنت-5g",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5378,
+            "link": "https:\/\/tastebox.ir\/blog\/%d8%a7%db%8c%d9%86%d8%aa%d8%b1%d9%86%d8%aa-5g\/",
+            "chars": 15247
+        },
+        {
+            "path": "\/blog\/تأثیر-اینترنت-فیبر-نوری-بر-رشد-کسب-و-کارهای-آنلاین-و-اقتصاد-دیجیتال\/",
+            "slug": "تأثیر-اینترنت-فیبر-نوری-بر-رشد-کسب-و-کارهای-آنلاین-و-اقتصاد-دیجیتال",
+            "source": "https:\/\/itanet.ir\/blog\/تأثیر-اینترنت-فیبر-نوری-بر-رشد-کسب-و-کارهای-آنلاین-و-اقتصاد-دیجیتال\/",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5379,
+            "link": "https:\/\/tastebox.ir\/blog\/%d8%aa%d8%a3%d8%ab%db%8c%d8%b1-%d8%a7%db%8c%d9%86%d8%aa%d8%b1%d9%86%d8%aa-%d9%81%db%8c%d8%a8%d8%b1-%d9%86%d9%88%d8%b1%db%8c-%d8%a8%d8%b1-%d8%b1%d8%b4%d8%af-%da%a9%d8%b3%d8%a8-%d9%88-%da%a9%d8%a7%d8%b1\/",
+            "chars": 11188
+        },
+        {
+            "path": "\/blog\/vps",
+            "slug": "vps",
+            "source": "https:\/\/itanet.ir\/blog\/vps",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5380,
+            "link": "https:\/\/tastebox.ir\/blog\/vps\/",
+            "chars": 18398
+        },
+        {
+            "path": "\/10806\/article\/",
+            "slug": "article",
+            "source": "https:\/\/itanet.ir\/10806\/article\/",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5382,
+            "link": "https:\/\/tastebox.ir\/10806-2\/article\/",
+            "chars": 317
+        },
+        {
+            "path": "\/moba\/article\/",
+            "slug": "article",
+            "source": "https:\/\/itanet.ir\/moba\/article\/",
+            "http": 200,
+            "action": "created",
+            "status": "ok",
+            "id": 5384,
+            "link": "https:\/\/tastebox.ir\/moba\/article\/",
+            "chars": 306
+        }
+    ]
+}

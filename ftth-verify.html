@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="fa-IR">
+    <head>
+        <link rel="shortcut icon" href="https://tastebox.ir/wp-content/uploads/2026/07/itanetfav.png" type="image/x-icon" />
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta http-equiv="X-UA-Compatible" content="ie=edge">
+                <meta name="theme-color" content="#17A2B8" />
+                <meta name="fontiran.com:license" content="B3L8B">
+                <link rel="pingback" href="https://tastebox.ir/xmlrpc.php" />
+        <script id="zhaket-booster" data-no-minify="1" data-no-optimize="1" data-noptimize="1" data-rocket-status="opt-out">
+    (function(){
+        // --- Configuration ---
+        const debug = false;
+        const blocked = ["https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200","https://ipapi.co/json/"];
+        const cdnMap = {};
+        const whitelist = ["zhakethub.ir","zhaket.com","samandehi.ir","enamad.ir","gov.ir","neshan.org","yektanet.com"];
+        const maxTime = 20000;
+        const reportUrl = 'https://tastebox.ir/wp-admin/admin-ajax.php?action=zhaket_booster_report_slow_domain';
+        const currentHost = window.location.hostname;
+
+        // تشخیص اینکه آیا سرویس ورکر در حال حاضر فعال است یا خیر
+        const isSwActive = false;
+
+        if (debug) {
+            console.log('%c[Zhaket Booster Start] Debug Mode Active', "color: #27ae60; font-weight: bold;");
+            if (isSwActive) {
+                console.log('%c⚡ Running in SW Mode: DOM Interception Disabled, Performance Monitoring Active.', "color: #2980b9;");
+            } else {
+                console.log('%c⚠️ Running in Fallback Mode: DOM Interception & Monitoring both Active.', "color: #f39c12;");
+            }
+        }
+
+        /**
+         * Logic:
+         * 1. Own Domain -> Allow + isLocal: true (Bypass tracking)
+         * 2. Blocked -> Block
+         * 3. CDN -> Replace
+         * 4. Whitelist/Default -> Allow + isLocal: false
+         */
+        function getProcessedUrl(src) {
+            if (!src || typeof src !== 'string' || src.startsWith('data:')) return { action: 'allow', url: src, isLocal: true };
+
+            try {
+                const urlObj = new URL(src, window.location.origin);
+                const fullUrl = urlObj.href;
+                const host = urlObj.hostname;
+
+                const isDomainMatch = (pattern) => host === pattern || host.endsWith('.' + pattern);
+                const isFullUrlMatch = (pattern) => fullUrl.includes(pattern);
+
+                if (isDomainMatch(currentHost)) return { action: 'allow', url: src, isLocal: true };
+
+                if (blocked.some(p => isDomainMatch(p) || isFullUrlMatch(p))) {
+                    if (debug && !isSwActive) console.log(`%c[Blocked By Zhaket Booster]%c ${src}`, "color: red; font-weight: bold;", "color: inherit;");
+                    return { action: 'block', url: src, isLocal: false };
+                }
+
+                const cdnMatch = cdnMap[src] || cdnMap[fullUrl] || cdnMap[src.replace(window.location.origin, '')];
+                if (cdnMatch) {
+                    if (debug && !isSwActive) console.log(`%c[CDN Replace By Zhaket Booster]%c ${src} -> ${cdnMatch}`, "color: blue; font-weight: bold;", "color: inherit;");
+                    return { action: 'replace', url: cdnMatch, isLocal: false };
+                }
+
+                if (whitelist.some(p => isDomainMatch(p) || isFullUrlMatch(p))) return { action: 'allow', url: src, isLocal: false };
+
+                return { action: 'allow', url: src, isLocal: false };
+            } catch (e) {
+                return { action: 'allow', url: src, isLocal: false };
+            }
+        }
+
+        // =========================================================
+        // 🔴 بخش Fallback: فقط در صورت خاموش بودن SW اجرا می‌شود
+        // =========================================================
+        if (!isSwActive) {
+
+            // --- 1. Intercept Element Creation ---
+            const _createElement = document.createElement.bind(document);
+            document.createElement = function(tag) {
+                const el = _createElement(tag);
+                const tagName = tag.toLowerCase();
+
+                if (tagName === 'script' || tagName === 'link' || tagName === 'img' || tagName === 'iframe') {
+                    const targetAttr = tagName === 'link' ? 'href' : 'src';
+
+                    Object.defineProperty(el, targetAttr, {
+                        get: function() { return this.getAttribute(targetAttr); },
+                        set: function(val) {
+                            const result = getProcessedUrl(val);
+                            if (result.action === 'block') {
+                                if (tagName === 'script') el.setAttribute('type', 'javascript/blocked');
+                                return;
+                            }
+                            if (result.action === 'replace') {
+                                val = result.url;
+                                el.removeAttribute('integrity');
+                            }
+                            this.setAttribute(targetAttr, val);
+                        }
+                    });
+
+                    const _setAttribute = el.setAttribute.bind(el);
+                    el.setAttribute = function(name, value) {
+                        if (name.toLowerCase() === targetAttr) {
+                            const result = getProcessedUrl(value);
+                            if (result.action === 'block') {
+                                if (tagName === 'script') _setAttribute.call(this, 'type', 'javascript/blocked');
+                                return;
+                            }
+                            if (result.action === 'replace') {
+                                value = result.url;
+                                this.removeAttribute('integrity');
+                            }
+                        }
+                        return _setAttribute.call(this, name, value);
+                    };
+                }
+                return el;
+            };
+
+            // --- 2. Network Interception (Fetch & XHR) ---
+            const _fetch = window.fetch;
+            window.fetch = function(input, init) {
+                let url = (typeof input === 'string') ? input : (input?.url || '');
+                const result = getProcessedUrl(url);
+                if (result.action === 'block') return Promise.reject(new Error('Blocked by Zhaket Booster'));
+
+                if (result.action === 'replace') {
+                    if (typeof input === 'string') input = result.url;
+                    else if (input && input.url) input = new Request(result.url, input);
+                }
+                return _fetch.apply(this, arguments);
+            };
+
+            const _open = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function(method, url) {
+                const result = getProcessedUrl(url);
+                this._isBlocked = (result.action === 'block');
+                const finalUrl = result.action === 'replace' ? result.url : url;
+                return _open.call(this, method, finalUrl, arguments[2], arguments[3], arguments[4]);
+            };
+
+            const _send = XMLHttpRequest.prototype.send;
+            XMLHttpRequest.prototype.send = function() {
+                if (this._isBlocked) {
+                    setTimeout(() => this.dispatchEvent(new Event('error')), 0);
+                    return;
+                }
+                return _send.apply(this, arguments);
+            };
+
+            // --- 3. Mutation Observer ---
+            const processNode = (node) => {
+                if (node.nodeType !== 1 || node.hasAttribute('data-booster-processed')) return;
+
+                const isScript = node.tagName === 'SCRIPT';
+                const isLink = node.tagName === 'LINK';
+                const attr = isScript ? 'src' : (isLink ? 'href' : (node.tagName === 'IFRAME' || node.tagName === 'IMG' ? 'src' : null));
+
+                if (!attr || !node.hasAttribute(attr)) return;
+                const url = node.getAttribute(attr);
+                if (!url) return;
+
+                const result = getProcessedUrl(url);
+
+                node.setAttribute('data-booster-processed', 'true');
+
+                if (result.action === 'block') {
+                    if (isScript) node.setAttribute('type', 'javascript/blocked');
+                    node.remove();
+                } else if (result.action === 'replace') {
+                    if (isScript) {
+                        const newScript = document.createElement('script');
+                        newScript.src = result.url;
+                        newScript.setAttribute('data-booster-processed', 'true');
+                        Array.from(node.attributes).forEach(a => {
+                            if (a.name !== 'src' && a.name !== 'data-booster-processed' && a.name !== 'integrity') {
+                                newScript.setAttribute(a.name, a.value);
+                            }
+                        });
+                        if (node.parentNode) node.parentNode.insertBefore(newScript, node);
+                        node.remove();
+                    } else {
+                        node.setAttribute(attr, result.url);
+                        node.removeAttribute('integrity');
+                    }
+                }
+            };
+
+            const observer = new MutationObserver(muts => {
+                muts.forEach(m => m.addedNodes.forEach(node => {
+                    processNode(node);
+                    if (node.querySelectorAll) node.querySelectorAll('script, link, iframe, img').forEach(processNode);
+                }));
+            });
+            observer.observe(document.documentElement, { childList: true, subtree: true });
+            document.querySelectorAll('script, link, iframe, img').forEach(processNode);
+
+        } // پایان بخش Fallback
+
+        // =========================================================
+        // 🟢 بخش مانیتورینگ: همیشه اجرا می‌شود (مستقل از وضعیت SW)
+        // =========================================================
+        let reportBuffer = [];
+        let reportTimer = null;
+        const DEBOUNCE_DELAY = 5000; // ارسال یکپارچه بعد از 5 ثانیه
+
+        function sendBatchedReports() {
+            if (reportBuffer.length === 0) return;
+            if (reportTimer) { clearTimeout(reportTimer); reportTimer = null; }
+
+            try {
+                const isAuthorizedUser = document.body && (
+                    document.body.classList.contains('logged-in') ||
+                    document.body.classList.contains('wp-admin')
+                );
+
+                if (isAuthorizedUser) {
+                    const data = new FormData();
+                    data.append('reports', JSON.stringify(reportBuffer));
+
+                    if (navigator.sendBeacon) navigator.sendBeacon(reportUrl, data);
+                    else fetch(reportUrl, { method: 'POST', body: data, keepalive: true }).catch(()=>{});
+
+                    if (debug) console.log(`%c📊 [Zhaket Booster] Batch Report Sent: %c${reportBuffer.length} slow/failed items`, "color: green; font-weight: bold;", "color: inherit;");
+                }
+            } catch (e) {}
+
+            reportBuffer = [];
+        }
+
+        function queueReportItem(itemData) {
+            reportBuffer.push(itemData);
+            if (reportTimer) clearTimeout(reportTimer);
+            reportTimer = setTimeout(sendBatchedReports, DEBOUNCE_DELAY);
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') sendBatchedReports();
+        });
+
+        if (window.PerformanceObserver) {
+            const perfObserver = new PerformanceObserver(list => {
+                list.getEntries().forEach(entry => {
+                    const result = getProcessedUrl(entry.name);
+
+                    // منابعی که بلاک شده‌اند یا متعلق به دامنه خودت هستند بررسی نمی‌شوند
+                    if (result.action === 'block' || result.isLocal) return;
+
+                    const isCached = entry.transferSize === 0 && entry.decodedBodySize > 0;
+                    const isSlow = !isCached && entry.duration > maxTime;
+                    const isFailed = 'responseStatus' in entry ? entry.responseStatus >= 400 : false;
+
+                    if (isSlow || isFailed) {
+                        if (debug) {
+                            const status = isFailed ? `FAILED (HTTP ${entry.responseStatus || 'Error'})` : `${Math.round(entry.duration)}ms`;
+                            console.log(`%c🐢 [Queued External Resource]%c ${entry.name} (${status})`, "color: orange; font-weight: bold;", "color: inherit;");
+                        }
+
+                        queueReportItem({
+                            url: entry.name,
+                            duration: isFailed ? (entry.responseStatus || 0) : entry.duration,
+                            issue_type: isFailed ? 'failed' : 'slow'
+                        });
+                    }
+                });
+            });
+            perfObserver.observe({ type: 'resource', buffered: true });
+        }
+    })();
+</script>        <script id="zhb-sw-manager" data-no-minify="1" data-no-optimize="1" data-noptimize="1" data-rocket-status="opt-out">
+            if ('serviceWorker' in navigator) {
+                const shouldHaveSW = false;
+
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    let mySW = null;
+                    let otherSW = null;
+
+                    // بررسی وضعیت فعلی مرورگر
+                    for (let reg of registrations) {
+                        if (reg.active && reg.active.scriptURL.includes('zhb-sw.js')) {
+                            mySW = reg;
+                        } else {
+                            otherSW = reg;
+                        }
+                    }
+
+                    if (shouldHaveSW) {
+                        // الف: اگر باید فعال باشد اما سرویس‌ورکر دیگری مزاحم است
+                        if (otherSW) {
+                            console.warn('Zhaket Booster: Other SW detected. Running in Fallback Mode (No SW).');
+                            // در این حالت اگر سرویس‌ورکر ما قبلاً نصب شده بود، آن را حذف می‌کنیم تا تداخل ایجاد نشود
+                            if (mySW) mySW.unregister();
+                        }
+                        // ب: اگر باید فعال باشد و هیچ سرویس‌ورکری نیست، نصبش کن
+                        else if (!mySW) {
+                            navigator.serviceWorker.register('/zhb-sw.js')
+                                .then(() => console.log('Zhaket Booster SW Registered.'));
+                        }
+                    } else {
+                        // ج: اگر باید غیرفعال باشد (تنظیمات خاموش است) ولی سرویس‌ورکر ما هنوز در مرورگر هست
+                        if (mySW) {
+                            mySW.unregister().then(() => {
+                                console.log('Zhaket Booster SW Unregistered (Settings off).');
+                                // لود مجدد صفحه برای اطمینان از اینکه درخواست‌ها دیگر از پراکسی رد نمی‌شوند
+                                window.location.reload();
+                            });
+                        }
+                    }
+                });
+            }
+        </script>
+        				<script>document.documentElement.className = document.documentElement.className + ' yes-js js_active js'</script>
+			<title>خرید اینترنت فیبر نوری مخابرات FTTH &#8211; ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ)</title>
+<meta name='robots' content='max-image-preview:large' />
+<link rel="alternate" type="application/rss+xml" title="ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ) &raquo; خوراک" href="https://tastebox.ir/feed/" />
+<link rel="alternate" type="application/rss+xml" title="ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ) &raquo; خوراک دیدگاه‌ها" href="https://tastebox.ir/comments/feed/" />
+<link rel="alternate" title="oEmbed (JSON)" type="application/json+oembed" href="https://tastebox.ir/wp-json/oembed/1.0/embed?url=https%3A%2F%2Ftastebox.ir%2Fftth%2F" />
+<link rel="alternate" title="oEmbed (XML)" type="text/xml+oembed" href="https://tastebox.ir/wp-json/oembed/1.0/embed?url=https%3A%2F%2Ftastebox.ir%2Fftth%2F&#038;format=xml" />
+<style id="wp-img-auto-sizes-contain-inline-css">
+img:is([sizes=auto i],[sizes^="auto," i]){contain-intrinsic-size:3000px 1500px}
+/*# sourceURL=wp-img-auto-sizes-contain-inline-css */
+</style>
+
+<link rel='stylesheet' id='partial-payment-blocks-integration-css' href='https://tastebox.ir/wp-content/plugins/woo-wallet/build/partial-payment/style-index.css?ver=1.6.6' media='all' />
+<link rel='stylesheet' id='wp-block-library-rtl-css' href='https://tastebox.ir/wp-includes/css/dist/block-library/style-rtl.min.css?ver=7.0.1' media='all' />
+<style id="classic-theme-styles-inline-css">
+/*! This file is auto-generated */
+.wp-block-button__link{color:#fff;background-color:#32373c;border-radius:9999px;box-shadow:none;text-decoration:none;padding:calc(.667em + 2px) calc(1.333em + 2px);font-size:1.125em}.wp-block-file__button{background:#32373c;color:#fff;text-decoration:none}
+/*# sourceURL=/wp-includes/css/classic-themes.min.css */
+</style>
+<style id="woo-wallet-mini-wallet-style-inline-css">
+.wc-block-mini-wallet{display:inline-flex;align-items:center;line-height:1}.wc-block-mini-wallet__link{display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:inherit;padding:6px 10px;border-radius:6px;transition:background-color .2s ease,color .2s ease,box-shadow .2s ease;line-height:1;white-space:nowrap;cursor:pointer}.wc-block-mini-wallet__link:hover,.wc-block-mini-wallet__link:focus-visible{background-color:rgba(0,0,0,.05);text-decoration:none;color:inherit;outline:none}.wc-block-mini-wallet__link:focus-visible{box-shadow:0 0 0 2px var(--wp--preset--color--primary, #007cba)}.wc-block-mini-wallet__icon{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1;color:currentColor}.wc-block-mini-wallet__icon svg{display:block;width:inherit;height:inherit}.wc-block-mini-wallet__amount{font-weight:600;font-size:inherit;line-height:1;color:currentColor;font-variant-numeric:tabular-nums}.wc-block-mini-wallet__amount .woocommerce-Price-amount{font-weight:inherit;font-size:inherit;color:inherit}.wc-block-mini-wallet__amount .woocommerce-Price-currencySymbol{font-weight:inherit;color:inherit}.wc-block-mini-wallet.is-focused .wc-block-mini-wallet__link{box-shadow:0 0 0 2px var(--wp--preset--color--primary, #007cba)}@media(max-width: 480px){.wc-block-mini-wallet__link{padding:4px 6px;gap:4px}.wc-block-mini-wallet__amount{font-size:.9em}}
+
+/*# sourceURL=https://tastebox.ir/wp-content/plugins/woo-wallet/build/blocks/mini-wallet/style-index.css */
+</style>
+<link rel='stylesheet' id='jquery-selectBox-css' href='https://tastebox.ir/wp-content/plugins/yith-woocommerce-wishlist/assets/css/jquery.selectBox.css?ver=1.2.0' media='all' />
+<link rel='stylesheet' id='woocommerce_prettyPhoto_css-rtl-css' href='//tastebox.ir/wp-content/plugins/woocommerce/assets/css/prettyPhoto-rtl.css?ver=3.1.6' media='all' />
+<link rel='stylesheet' id='yith-wcwl-main-css' href='https://tastebox.ir/wp-content/plugins/yith-woocommerce-wishlist/assets/css/style.css?ver=4.16.0' media='all' />
+<style id="yith-wcwl-main-inline-css">
+ :root { --rounded-corners-radius: 16px; --color-add-to-cart-background: #333333; --color-add-to-cart-text: #FFFFFF; --color-add-to-cart-border: #333333; --color-add-to-cart-background-hover: #4F4F4F; --color-add-to-cart-text-hover: #FFFFFF; --color-add-to-cart-border-hover: #4F4F4F; --add-to-cart-rounded-corners-radius: 16px; --color-button-style-1-background: #333333; --color-button-style-1-text: #FFFFFF; --color-button-style-1-border: #333333; --color-button-style-1-background-hover: #4F4F4F; --color-button-style-1-text-hover: #FFFFFF; --color-button-style-1-border-hover: #4F4F4F; --color-button-style-2-background: #333333; --color-button-style-2-text: #FFFFFF; --color-button-style-2-border: #333333; --color-button-style-2-background-hover: #4F4F4F; --color-button-style-2-text-hover: #FFFFFF; --color-button-style-2-border-hover: #4F4F4F; --color-wishlist-table-background: #FFFFFF; --color-wishlist-table-text: #6d6c6c; --color-wishlist-table-border: #FFFFFF; --color-headers-background: #F4F4F4; --color-share-button-color: #FFFFFF; --color-share-button-color-hover: #FFFFFF; --color-fb-button-background: #39599E; --color-fb-button-background-hover: #595A5A; --color-tw-button-background: #45AFE2; --color-tw-button-background-hover: #595A5A; --color-pr-button-background: #AB2E31; --color-pr-button-background-hover: #595A5A; --color-em-button-background: #FBB102; --color-em-button-background-hover: #595A5A; --color-wa-button-background: #00A901; --color-wa-button-background-hover: #595A5A; --feedback-duration: 3s } 
+ :root { --rounded-corners-radius: 16px; --color-add-to-cart-background: #333333; --color-add-to-cart-text: #FFFFFF; --color-add-to-cart-border: #333333; --color-add-to-cart-background-hover: #4F4F4F; --color-add-to-cart-text-hover: #FFFFFF; --color-add-to-cart-border-hover: #4F4F4F; --add-to-cart-rounded-corners-radius: 16px; --color-button-style-1-background: #333333; --color-button-style-1-text: #FFFFFF; --color-button-style-1-border: #333333; --color-button-style-1-background-hover: #4F4F4F; --color-button-style-1-text-hover: #FFFFFF; --color-button-style-1-border-hover: #4F4F4F; --color-button-style-2-background: #333333; --color-button-style-2-text: #FFFFFF; --color-button-style-2-border: #333333; --color-button-style-2-background-hover: #4F4F4F; --color-button-style-2-text-hover: #FFFFFF; --color-button-style-2-border-hover: #4F4F4F; --color-wishlist-table-background: #FFFFFF; --color-wishlist-table-text: #6d6c6c; --color-wishlist-table-border: #FFFFFF; --color-headers-background: #F4F4F4; --color-share-button-color: #FFFFFF; --color-share-button-color-hover: #FFFFFF; --color-fb-button-background: #39599E; --color-fb-button-background-hover: #595A5A; --color-tw-button-background: #45AFE2; --color-tw-button-background-hover: #595A5A; --color-pr-button-background: #AB2E31; --color-pr-button-background-hover: #595A5A; --color-em-button-background: #FBB102; --color-em-button-background-hover: #595A5A; --color-wa-button-background: #00A901; --color-wa-button-background-hover: #595A5A; --feedback-duration: 3s } 
+/*# sourceURL=yith-wcwl-main-inline-css */
+</style>
+<style id="global-styles-inline-css">
+:root{--wp--preset--aspect-ratio--square: 1;--wp--preset--aspect-ratio--4-3: 4/3;--wp--preset--aspect-ratio--3-4: 3/4;--wp--preset--aspect-ratio--3-2: 3/2;--wp--preset--aspect-ratio--2-3: 2/3;--wp--preset--aspect-ratio--16-9: 16/9;--wp--preset--aspect-ratio--9-16: 9/16;--wp--preset--color--black: #000000;--wp--preset--color--cyan-bluish-gray: #abb8c3;--wp--preset--color--white: #ffffff;--wp--preset--color--pale-pink: #f78da7;--wp--preset--color--vivid-red: #cf2e2e;--wp--preset--color--luminous-vivid-orange: #ff6900;--wp--preset--color--luminous-vivid-amber: #fcb900;--wp--preset--color--light-green-cyan: #7bdcb5;--wp--preset--color--vivid-green-cyan: #00d084;--wp--preset--color--pale-cyan-blue: #8ed1fc;--wp--preset--color--vivid-cyan-blue: #0693e3;--wp--preset--color--vivid-purple: #9b51e0;--wp--preset--gradient--vivid-cyan-blue-to-vivid-purple: linear-gradient(135deg,rgb(6,147,227) 0%,rgb(155,81,224) 100%);--wp--preset--gradient--light-green-cyan-to-vivid-green-cyan: linear-gradient(135deg,rgb(122,220,180) 0%,rgb(0,208,130) 100%);--wp--preset--gradient--luminous-vivid-amber-to-luminous-vivid-orange: linear-gradient(135deg,rgb(252,185,0) 0%,rgb(255,105,0) 100%);--wp--preset--gradient--luminous-vivid-orange-to-vivid-red: linear-gradient(135deg,rgb(255,105,0) 0%,rgb(207,46,46) 100%);--wp--preset--gradient--very-light-gray-to-cyan-bluish-gray: linear-gradient(135deg,rgb(238,238,238) 0%,rgb(169,184,195) 100%);--wp--preset--gradient--cool-to-warm-spectrum: linear-gradient(135deg,rgb(74,234,220) 0%,rgb(151,120,209) 20%,rgb(207,42,186) 40%,rgb(238,44,130) 60%,rgb(251,105,98) 80%,rgb(254,248,76) 100%);--wp--preset--gradient--blush-light-purple: linear-gradient(135deg,rgb(255,206,236) 0%,rgb(152,150,240) 100%);--wp--preset--gradient--blush-bordeaux: linear-gradient(135deg,rgb(254,205,165) 0%,rgb(254,45,45) 50%,rgb(107,0,62) 100%);--wp--preset--gradient--luminous-dusk: linear-gradient(135deg,rgb(255,203,112) 0%,rgb(199,81,192) 50%,rgb(65,88,208) 100%);--wp--preset--gradient--pale-ocean: linear-gradient(135deg,rgb(255,245,203) 0%,rgb(182,227,212) 50%,rgb(51,167,181) 100%);--wp--preset--gradient--electric-grass: linear-gradient(135deg,rgb(202,248,128) 0%,rgb(113,206,126) 100%);--wp--preset--gradient--midnight: linear-gradient(135deg,rgb(2,3,129) 0%,rgb(40,116,252) 100%);--wp--preset--font-size--small: 13px;--wp--preset--font-size--medium: 20px;--wp--preset--font-size--large: 36px;--wp--preset--font-size--x-large: 42px;--wp--preset--spacing--20: 0.44rem;--wp--preset--spacing--30: 0.67rem;--wp--preset--spacing--40: 1rem;--wp--preset--spacing--50: 1.5rem;--wp--preset--spacing--60: 2.25rem;--wp--preset--spacing--70: 3.38rem;--wp--preset--spacing--80: 5.06rem;--wp--preset--shadow--natural: 6px 6px 9px rgba(0, 0, 0, 0.2);--wp--preset--shadow--deep: 12px 12px 50px rgba(0, 0, 0, 0.4);--wp--preset--shadow--sharp: 6px 6px 0px rgba(0, 0, 0, 0.2);--wp--preset--shadow--outlined: 6px 6px 0px -3px rgb(255, 255, 255), 6px 6px rgb(0, 0, 0);--wp--preset--shadow--crisp: 6px 6px 0px rgb(0, 0, 0);}:where(body) { margin: 0; }:where(.is-layout-flex){gap: 0.5em;}:where(.is-layout-grid){gap: 0.5em;}body .is-layout-flex{display: flex;}.is-layout-flex{flex-wrap: wrap;align-items: center;}.is-layout-flex > :is(*, div){margin: 0;}body .is-layout-grid{display: grid;}.is-layout-grid > :is(*, div){margin: 0;}body{padding-top: 0px;padding-right: 0px;padding-bottom: 0px;padding-left: 0px;}:root :where(.wp-element-button, .wp-block-button__link){background-color: #32373c;border-width: 0;color: #fff;font-family: inherit;font-size: inherit;font-style: inherit;font-weight: inherit;letter-spacing: inherit;line-height: inherit;padding-top: calc(0.667em + 2px);padding-right: calc(1.333em + 2px);padding-bottom: calc(0.667em + 2px);padding-left: calc(1.333em + 2px);text-decoration: none;text-transform: inherit;}.has-black-color{color: var(--wp--preset--color--black) !important;}.has-cyan-bluish-gray-color{color: var(--wp--preset--color--cyan-bluish-gray) !important;}.has-white-color{color: var(--wp--preset--color--white) !important;}.has-pale-pink-color{color: var(--wp--preset--color--pale-pink) !important;}.has-vivid-red-color{color: var(--wp--preset--color--vivid-red) !important;}.has-luminous-vivid-orange-color{color: var(--wp--preset--color--luminous-vivid-orange) !important;}.has-luminous-vivid-amber-color{color: var(--wp--preset--color--luminous-vivid-amber) !important;}.has-light-green-cyan-color{color: var(--wp--preset--color--light-green-cyan) !important;}.has-vivid-green-cyan-color{color: var(--wp--preset--color--vivid-green-cyan) !important;}.has-pale-cyan-blue-color{color: var(--wp--preset--color--pale-cyan-blue) !important;}.has-vivid-cyan-blue-color{color: var(--wp--preset--color--vivid-cyan-blue) !important;}.has-vivid-purple-color{color: var(--wp--preset--color--vivid-purple) !important;}.has-black-background-color{background-color: var(--wp--preset--color--black) !important;}.has-cyan-bluish-gray-background-color{background-color: var(--wp--preset--color--cyan-bluish-gray) !important;}.has-white-background-color{background-color: var(--wp--preset--color--white) !important;}.has-pale-pink-background-color{background-color: var(--wp--preset--color--pale-pink) !important;}.has-vivid-red-background-color{background-color: var(--wp--preset--color--vivid-red) !important;}.has-luminous-vivid-orange-background-color{background-color: var(--wp--preset--color--luminous-vivid-orange) !important;}.has-luminous-vivid-amber-background-color{background-color: var(--wp--preset--color--luminous-vivid-amber) !important;}.has-light-green-cyan-background-color{background-color: var(--wp--preset--color--light-green-cyan) !important;}.has-vivid-green-cyan-background-color{background-color: var(--wp--preset--color--vivid-green-cyan) !important;}.has-pale-cyan-blue-background-color{background-color: var(--wp--preset--color--pale-cyan-blue) !important;}.has-vivid-cyan-blue-background-color{background-color: var(--wp--preset--color--vivid-cyan-blue) !important;}.has-vivid-purple-background-color{background-color: var(--wp--preset--color--vivid-purple) !important;}.has-black-border-color{border-color: var(--wp--preset--color--black) !important;}.has-cyan-bluish-gray-border-color{border-color: var(--wp--preset--color--cyan-bluish-gray) !important;}.has-white-border-color{border-color: var(--wp--preset--color--white) !important;}.has-pale-pink-border-color{border-color: var(--wp--preset--color--pale-pink) !important;}.has-vivid-red-border-color{border-color: var(--wp--preset--color--vivid-red) !important;}.has-luminous-vivid-orange-border-color{border-color: var(--wp--preset--color--luminous-vivid-orange) !important;}.has-luminous-vivid-amber-border-color{border-color: var(--wp--preset--color--luminous-vivid-amber) !important;}.has-light-green-cyan-border-color{border-color: var(--wp--preset--color--light-green-cyan) !important;}.has-vivid-green-cyan-border-color{border-color: var(--wp--preset--color--vivid-green-cyan) !important;}.has-pale-cyan-blue-border-color{border-color: var(--wp--preset--color--pale-cyan-blue) !important;}.has-vivid-cyan-blue-border-color{border-color: var(--wp--preset--color--vivid-cyan-blue) !important;}.has-vivid-purple-border-color{border-color: var(--wp--preset--color--vivid-purple) !important;}.has-vivid-cyan-blue-to-vivid-purple-gradient-background{background: var(--wp--preset--gradient--vivid-cyan-blue-to-vivid-purple) !important;}.has-light-green-cyan-to-vivid-green-cyan-gradient-background{background: var(--wp--preset--gradient--light-green-cyan-to-vivid-green-cyan) !important;}.has-luminous-vivid-amber-to-luminous-vivid-orange-gradient-background{background: var(--wp--preset--gradient--luminous-vivid-amber-to-luminous-vivid-orange) !important;}.has-luminous-vivid-orange-to-vivid-red-gradient-background{background: var(--wp--preset--gradient--luminous-vivid-orange-to-vivid-red) !important;}.has-very-light-gray-to-cyan-bluish-gray-gradient-background{background: var(--wp--preset--gradient--very-light-gray-to-cyan-bluish-gray) !important;}.has-cool-to-warm-spectrum-gradient-background{background: var(--wp--preset--gradient--cool-to-warm-spectrum) !important;}.has-blush-light-purple-gradient-background{background: var(--wp--preset--gradient--blush-light-purple) !important;}.has-blush-bordeaux-gradient-background{background: var(--wp--preset--gradient--blush-bordeaux) !important;}.has-luminous-dusk-gradient-background{background: var(--wp--preset--gradient--luminous-dusk) !important;}.has-pale-ocean-gradient-background{background: var(--wp--preset--gradient--pale-ocean) !important;}.has-electric-grass-gradient-background{background: var(--wp--preset--gradient--electric-grass) !important;}.has-midnight-gradient-background{background: var(--wp--preset--gradient--midnight) !important;}.has-small-font-size{font-size: var(--wp--preset--font-size--small) !important;}.has-medium-font-size{font-size: var(--wp--preset--font-size--medium) !important;}.has-large-font-size{font-size: var(--wp--preset--font-size--large) !important;}.has-x-large-font-size{font-size: var(--wp--preset--font-size--x-large) !important;}
+:root :where(.wp-block-icon svg){width: 24px;}
+:where(.wp-block-post-template.is-layout-flex){gap: 1.25em;}:where(.wp-block-post-template.is-layout-grid){gap: 1.25em;}
+:where(.wp-block-term-template.is-layout-flex){gap: 1.25em;}:where(.wp-block-term-template.is-layout-grid){gap: 1.25em;}
+:where(.wp-block-columns.is-layout-flex){gap: 2em;}:where(.wp-block-columns.is-layout-grid){gap: 2em;}
+:root :where(.wp-block-pullquote){font-size: 1.5em;line-height: 1.6;}
+/*# sourceURL=global-styles-inline-css */
+</style>
+<link rel='stylesheet' id='contact-form-7-css' href='https://tastebox.ir/wp-content/plugins/contact-form-7/includes/css/styles.css?ver=6.1.6' media='all' />
+<link rel='stylesheet' id='contact-form-7-rtl-css' href='https://tastebox.ir/wp-content/plugins/contact-form-7/includes/css/styles-rtl.css?ver=6.1.6' media='all' />
+<link rel='stylesheet' id='wccm-style-css' href='https://tastebox.ir/wp-content/plugins/woocommerce-compare-list/css/wccm-style.css?ver=1.1.2' media='all' />
+<link rel='stylesheet' id='woocommerce-layout-rtl-css' href='https://tastebox.ir/wp-content/plugins/woocommerce/assets/css/woocommerce-layout-rtl.css?ver=10.9.3' media='all' />
+<link rel='stylesheet' id='woocommerce-smallscreen-rtl-css' href='https://tastebox.ir/wp-content/plugins/woocommerce/assets/css/woocommerce-smallscreen-rtl.css?ver=10.9.3' media='only screen and (max-width: 768px)' />
+<link rel='stylesheet' id='woocommerce-general-rtl-css' href='https://tastebox.ir/wp-content/plugins/woocommerce/assets/css/woocommerce-rtl.css?ver=10.9.3' media='all' />
+<style id="woocommerce-inline-inline-css">
+.woocommerce form .form-row .required { visibility: visible; }
+/*# sourceURL=woocommerce-inline-inline-css */
+</style>
+<link rel='stylesheet' id='mega-theme-icon-css' href='https://tastebox.ir/wp-content/plugins/elementor-pro/megatheme/includes/icon/style.css?ver=7.0.1' media='all' />
+<link rel='stylesheet' id='woo-variation-swatches-css' href='https://tastebox.ir/wp-content/plugins/woo-variation-swatches/assets/css/frontend.min.css?ver=2.3.0' media='all' />
+<style id="woo-variation-swatches-inline-css">
+:root {
+--wvs-tick:url("data:image/svg+xml;utf8,%3Csvg filter='drop-shadow(0px 0px 2px rgb(0 0 0 / .8))' xmlns='http://www.w3.org/2000/svg'  viewBox='0 0 30 30'%3E%3Cpath fill='none' stroke='%23ffffff' stroke-linecap='round' stroke-linejoin='round' stroke-width='4' d='M4 16L11 23 27 7'/%3E%3C/svg%3E");
+
+--wvs-cross:url("data:image/svg+xml;utf8,%3Csvg filter='drop-shadow(0px 0px 5px rgb(255 255 255 / .6))' xmlns='http://www.w3.org/2000/svg' width='72px' height='72px' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='%23ff0000' stroke-linecap='round' stroke-width='0.6' d='M5 5L19 19M19 5L5 19'/%3E%3C/svg%3E");
+--wvs-single-product-item-width:30px;
+--wvs-single-product-item-height:30px;
+--wvs-single-product-item-font-size:16px}
+/*# sourceURL=woo-variation-swatches-inline-css */
+</style>
+<link rel='stylesheet' id='dina-bootstrap-css' href='https://tastebox.ir/wp-content/themes/dinakala/css/bootstrap-rtl.min.css?ver=6.9' media='all' />
+<link rel='stylesheet' id='dina-awe-css' href='https://tastebox.ir/wp-content/themes/dinakala/css/fontawesome.min.css?ver=6.9' media='all' />
+<link rel='stylesheet' id='dina-style-css' href='https://tastebox.ir/wp-content/themes/dinakala/style.css?ver=6.9' media='all' />
+<link rel='stylesheet' id='dina-font-css' href='https://tastebox.ir/wp-content/themes/dinakala/css/dana.css?ver=6.9' media='all' />
+<link rel='stylesheet' id='dina-simple-lightbox-css' href='https://tastebox.ir/wp-content/themes/dinakala/css/simpleLightbox.min.css?ver=6.9' media='all' />
+<link rel='stylesheet' id='dina-style-dark-css' href='https://tastebox.ir/wp-content/themes/dinakala/css/dina-dark.css?ver=6.9' media='all' />
+<link rel='stylesheet' id='pDate-style-css' href='https://tastebox.ir/wp-content/plugins/elementor-pro/megatheme/includes/assets/css/persian-datepicker.min.css?ver=7.0.1' media='all' />
+<script id="jquery-core-js" src="https://tastebox.ir/wp-includes/js/jquery/jquery.min.js?ver=3.7.1"></script>
+<script id="jquery-migrate-js" src="https://tastebox.ir/wp-includes/js/jquery/jquery-migrate.min.js?ver=3.4.1"></script>
+<script data-wp-strategy="defer" id="wc-jquery-blockui-js" src="https://tastebox.ir/wp-content/plugins/woocommerce/assets/js/jquery-blockui/jquery.blockUI.min.js?ver=2.7.0-wc.10.9.3"></script>
+<script id="wc-add-to-cart-js-extra">
+var wc_add_to_cart_params = {"ajax_url":"/wp-admin/admin-ajax.php","wc_ajax_url":"/?wc-ajax=%%endpoint%%","i18n_view_cart":"\u0645\u0634\u0627\u0647\u062f\u0647 \u0633\u0628\u062f \u062e\u0631\u06cc\u062f","cart_url":"https://tastebox.ir/cart/","is_cart":"","cart_redirect_after_add":"no"};
+//# sourceURL=wc-add-to-cart-js-extra
+</script>
+<script data-wp-strategy="defer" defer id="wc-add-to-cart-js" src="https://tastebox.ir/wp-content/plugins/woocommerce/assets/js/frontend/add-to-cart.min.js?ver=10.9.3"></script>
+<script data-wp-strategy="defer" defer id="wc-js-cookie-js" src="https://tastebox.ir/wp-content/plugins/woocommerce/assets/js/js-cookie/js.cookie.min.js?ver=2.1.4-wc.10.9.3"></script>
+<script id="woocommerce-js-extra">
+var woocommerce_params = {"ajax_url":"/wp-admin/admin-ajax.php","wc_ajax_url":"/?wc-ajax=%%endpoint%%","i18n_password_show":"\u0646\u0645\u0627\u06cc\u0634 \u0631\u0645\u0632\u0639\u0628\u0648\u0631","i18n_password_hide":"Hide password"};
+//# sourceURL=woocommerce-js-extra
+</script>
+<script data-wp-strategy="defer" defer id="woocommerce-js" src="https://tastebox.ir/wp-content/plugins/woocommerce/assets/js/frontend/woocommerce.min.js?ver=10.9.3"></script>
+<link rel="https://api.w.org/" href="https://tastebox.ir/wp-json/" /><link rel="alternate" title="JSON" type="application/json" href="https://tastebox.ir/wp-json/wp/v2/pages/5331" /><link rel="EditURI" type="application/rsd+xml" title="RSD" href="https://tastebox.ir/xmlrpc.php?rsd" />
+<meta name="generator" content="WordPress 7.0.1" />
+<meta name="generator" content="WooCommerce 10.9.3" />
+<link rel="canonical" href="https://tastebox.ir/ftth/" />
+<link rel='shortlink' href='https://tastebox.ir/?p=5331' />
+<meta name="generator" content="Redux 4.5.11" /><link rel="apple-touch-icon" href="https://tastebox.ir/wp-content/uploads/2026/07/itanetfav.png">	<noscript><style>.woocommerce-product-gallery{ opacity: 1 !important; }</style></noscript>
+	<meta name="generator" content="Elementor 4.1.4; features: e_font_icon_svg, additional_custom_breakpoints; settings: css_print_method-external, google_font-enabled, font_display-auto">
+			<style>
+				.e-con.e-parent:nth-of-type(n+4):not(.e-lazyloaded):not(.e-no-lazyload),
+				.e-con.e-parent:nth-of-type(n+4):not(.e-lazyloaded):not(.e-no-lazyload) * {
+					background-image: none !important;
+				}
+				@media screen and (max-height: 1024px) {
+					.e-con.e-parent:nth-of-type(n+3):not(.e-lazyloaded):not(.e-no-lazyload),
+					.e-con.e-parent:nth-of-type(n+3):not(.e-lazyloaded):not(.e-no-lazyload) * {
+						background-image: none !important;
+					}
+				}
+				@media screen and (max-height: 640px) {
+					.e-con.e-parent:nth-of-type(n+2):not(.e-lazyloaded):not(.e-no-lazyload),
+					.e-con.e-parent:nth-of-type(n+2):not(.e-lazyloaded):not(.e-no-lazyload) * {
+						background-image: none !important;
+					}
+				}
+			</style>
+			<style id="di_data-dynamic-css" title="dynamic-css" class="redux-options-output">body.dina-light.theme-dinakala:not(.page-template-elementor_canvas){background-image: url('https://tastebox.ir/wp-content/themes/dinakala/includes/ReduxCore/assets/img/patterns/bg.png');}body.dina-dark.theme-dinakala:not(.page-template-elementor_canvas){background-color:#121212;}body.dina-dark .dina-sfooter{background-color:#272727;}body.dina-light .dina-sfooter{background-image: url('https://tastebox.ir/wp-content/themes/dinakala/includes/ReduxCore/assets/img/fbg/0.png');}body.dina-light.dina-login-page:not(.page-template-elementor_canvas){background-image: url('https://tastebox.ir/wp-content/themes/dinakala/includes/ReduxCore/assets/img/fbg/0.png');}body.dina-dark.dina-login-page:not(.page-template-elementor_canvas){background-image: url('https://tastebox.ir/wp-content/themes/dinakala/includes/ReduxCore/assets/img/fbg/0.png');}</style>
+<style>
+    :root {
+        --dina-custom-color: #17A2B8;
+        --woocommerce: #17A2B8;
+        --dina-msg-bgcolor: #263238;
+        --dina-msg-fcolor: #FFFFFF;
+        --dina-head-text-color: #505763;
+        --dina-menu-bg-color: #FAFAFA;
+        --dina-menu-text-color: #4D4D4D;
+        --dina-footer-text-color: #212529;
+        --dina-add-btn-color: #28A745;
+        --dina-add-btn-text-color: #FFFFFF;
+        --dina-register-btn-text-color: #FFFFFF;
+        --dina-register-btn-color: #28A745;
+        --dina-register-btn-hover-text-color: #FFFFFF;
+        --dina-register-btn-hover-color: #218838;
+        --dina-login-page-btn-text-color: #FFFFFF;
+        --dina-login-page-btn-color: #28A745;
+        --dina-login-page-btn-hover-text-color: #FFFFFF;
+        --dina-login-page-btn-hover-color: #218838;
+        --dina-price-font-size: 19px;
+        --dina-content-font-size: 14px;
+        --dina-h1-font-size: 28px;
+        --dina-h2-font-size: 21px;
+        --dina-h3-font-size: 17px;
+        --dina-h4-font-size: 16px;
+        --dina-h5-font-size: 14px;
+        --dina-h6-font-size: 14px;
+        --dina-copy-bg-color: #FFFFFF;
+        --dina-copy-text-color: #212529;
+        --dina-menu-label-bg-color: #EF5350;
+        --dina-menu-label-text-color: #FFFFFF;
+        --dina-dis-color: #EF5350;
+        --dina-dis-text-color: #FFFFFF;
+        --dina-price-color: #39B156;
+        --dina-shop-box-bg: #FFFFFF;
+        --dina-read-product-color: #28A745;
+        --dina-read-product-text-color: #FFFFFF;
+        --dina-read-product-hover-color: #1E7E34;
+        --dina-read-product-hover-text-color: #FFFFFF;
+        --dina-woo-btn-bg: #138294;
+        --dina-bnr-hover-title: rgba( 23,162,184,0.5 );
+        --dina-social-btn-color: #31AAFF;
+        --dina-second-social-btn-color: #AC34A7;
+        --dina-third-social-btn-color: #47C054;
+        --dina-fourth-social-btn-color: #EC145B;
+        --dina-fifth-social-btn-color: #000000;
+        --dina-slider-tab-color: rgba( 96,125,139,0.9 );
+        --dina-slider-tab-color-active-border: rgba( 69,90,100,0.5 );
+        --dina-slider-tab-color-active: rgba( 69,90,100,0.9 );
+        --dina-dashboard-bg-color: #172B4D;
+        --dina-dashboard-text-color: #FFFFFF;
+        --dina-total-orders-bg-color: #2BC999;
+        --dina-completed-orders-bg-color: #FBB41A;
+        --dina-wallet-inventory-bg-color: #34AFFF;
+        --dina-registration-date-bg-color: #FF5E5B;
+        --dina-panel-widgets-text-color: #FFFFFF;
+        --dina-input-border-radius: 22px;
+        --dina-search-bg-color: var(--dina-input-bg-color);
+        --dina-search-text-color: var(--dina-input-text-color);
+        --dina-search-btn-bg-color: var(--dina-input-bg-color);
+        --dina-search-btn-text-color: var(--dina-input-text-color);
+                --dina-head-bg-color: #FFFFFF;
+        --dina-mobile-head-bg-color: #FFFFFF;
+                        --dina-order-progressbar-color: #EF394E;
+                            --dina-main-font:dana, Arial, sans-serif, tahoma;
+            --dina-md-font:dana, Arial, sans-serif, tahoma;
+            --dina-fd-font:dana, Arial, sans-serif, tahoma;
+            }
+
+            :root .dina-dark {
+                                                                --dina-head-bg-color: #272727;
+                --dina-mobile-head-bg-color: #272727;
+                    }
+        
+    
+    
+    
+        .pace {display: none}
+    
+        #dina-back-top { bottom:40px;right:20px;}
+    
+        .dina-socialbtn {bottom:40px;left:20px;}
+
+        .searchwp-live-search-no-min-chars::after {content: 'لطفا تایپ نمایید ...';}
+    
+    
+    
+    
+    
+            .dina-features-limited ul.dina-features-ul{-webkit-line-clamp:4}
+    
+    
+    
+</style>
+
+    </head>
+    
+    <body class="rtl wp-singular page-template-default page page-id-5331 wp-theme-dinakala theme-dinakala woocommerce-no-js woo-variation-swatches wvs-behavior-blur wvs-theme-dinakala wvs-tooltip dina-rtl dina-light dina-dark-first-style dina-show-bread dina-dana-font dina-fit-header dina-fit-footer elementor-default elementor-kit-3649" itemscope itemtype="https://schema.org/WebPage">
+
+    
+    
+<header class="dina-site-header" itemscope itemtype="https://schema.org/Organization" >
+    <meta itemprop="url" content="https://tastebox.ir"><meta itemprop="name" content="ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ)">    <!-- Header Div -->
+        <div class="container-fluid dina-header header">
+        <div class="container">
+            
+                        <div class="row dina-header-top-bar">
+
+                <!-- Header Menu -->
+                <nav class="col-md-6 dina-head-menu" itemscope itemtype="https://schema.org/SiteNavigationElement" >
+                    <div class="menu-%d9%81%d9%87%d8%b1%d8%b3%d8%aa-%d9%87%d8%af%d8%b1-container"><ul id="menu-%d9%81%d9%87%d8%b1%d8%b3%d8%aa-%d9%87%d8%af%d8%b1" class="menu"><li id="menu-item-3217" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-3217"><a href="#">راهنمای خرید</a></li>
+<li id="menu-item-4024" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-4024"><a href="https://tastebox.ir/%d8%a7%d8%b1%d8%aa%d8%a8%d8%a7%d8%b7-%d8%a8%d8%a7-%d9%85%d8%a7/">ارتباط با ما</a></li>
+<li id="menu-item-4022" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-4022"><a href="https://tastebox.ir/%d8%b3%d9%88%d8%a7%d9%84%d8%a7%d8%aa-%d9%85%d8%aa%d8%af%d8%a7%d9%88%d9%84/">سوالات متداول</a></li>
+<li id="menu-item-4023" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-4023"><a href="https://tastebox.ir/%d8%af%d8%b1%d8%a8%d8%a7%d8%b1%d9%87-%d9%85%d8%a7/">درباره ما</a></li>
+</ul></div>                </nav>
+                <!-- Header Menu -->
+                
+                                <!-- Header Contact -->
+                <div class="col-md-6 dina-head-contact">
+                    <meta itemprop="address" content="استان تهران، شهر تهران، خیابان مرکزی، ساختمان مرکزی، پلاک 7">
+                    <meta itemprop="image" content="https://tastebox.ir/wp-content/uploads/2026/07/itanetlogo320x114.png">
+
+                                        <div class="dina-head-phone" itemprop="telephone">
+                                                <a href="tel:09123332222" target="_blank">
+                                                    <i class="fal fa-phone" aria-hidden="true"></i>
+                            09123332222                                                </a>
+                                            </div>
+                    
+                                            <div class="dina-head-email" itemprop="email">
+                                                        <a href="mailto:info@site.com" target="_blank">
+                                                            <i class="fal fa-envelope" aria-hidden="true"></i>
+                                info@site.com                                                        </a>
+                                                    </div>
+                                    </div>
+                <!-- Header Contact -->
+                
+                
+            </div>
+            
+            
+            <div class="row dina-logo-box dina-mobile-right-logo">
+
+                                        <div class="col-6 dina-mobile-btns">
+                                <span class="btn btn-light dina-myaccount-mobile-btn" data-sidebar="open" data-panel="dinaNav" data-direction="right">
+            <i aria-hidden="true" data-title="فهرست" class="fal fa-bars"></i>
+        </span>
+                <a title="ورود یا ثبت‌نام" class="btn btn-light dina-mobile-login-btn dina-mergedbtn" href="javascript:void(0)" data-sidebar="open" data-panel="dinaSideLogin" data-direction="right">
+                <i aria-hidden="true" data-title="ورود" class="fal fa-user"></i>
+                <span class="dina-login-separator">|</span>
+                <i aria-hidden="true" data-title="ثبت‌نام" class="fal fa-user-plus"></i>
+            </a>
+                            </div>
+
+                                        <div class = "logo dina-logo col-md-3 col-6">
+                            <a href="https://tastebox.ir" title="ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ) | ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ)" class="dina-logo-link" rel="home">
+
+        
+        <img fetchpriority="high" itemprop="logo"        src="https://tastebox.ir/wp-content/uploads/2026/07/itanetlogo.png"
+        srcset="https://tastebox.ir/wp-content/uploads/2026/07/itanetlogo320x114.png 2x"
+        width="160"
+        height="57"
+        alt="ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ) | ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ)"
+        title="ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ) | ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ)"
+        class="dina-img-logo dina-light-logo dina-header-logo" fetchpriority="high"/>
+
+        
+            <img fetchpriority="high" itemprop="logo"            src="https://tastebox.ir/wp-content/uploads/2023/03/dark-logo.png"
+            srcset="https://tastebox.ir/wp-content/uploads/2023/03/dark-logo2x.png 2x"
+            width="160"
+            height="57"
+            alt="ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ) | ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ)"
+            title="ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ) | ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ)"
+            class="dina-img-logo dina-dark-logo dina-header-logo" fetchpriority="high"/>
+
+        
+                    <strong>ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ) | ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ) </strong>
+            </a>
+                    </div>
+
+                    
+                    
+                    <div class="col-md-6 dina-search-con">
+                            <form class="col-md-11 dina-search-bar" role="search" method="get" action="https://tastebox.ir/">
+                    <input type="hidden" name="post_type" value="product" />
+                <div class="input-group search-form dina-ajax-search-wrapper">
+                                <div class="input-group-before dina-prod-cat">
+                        <select  name='product_cat' id='dina-desktop-search-cat' class='product_cat'>
+	<option value='0' selected='selected'>دسته‌بندی</option>
+	<option class="level-0" value="uncategorized">بدون دسته‌بندی</option>
+</select>
+                    </div>
+                    
+                        <input autocomplete="off" data-swplive="true" name="s" type="text" class="form-control dina-search-input" placeholder="جستجو در محصولات..." aria-label="جستجو" required>
+            <div class="input-group-append">
+                <button class="btn dina-btn-search" type="submit" aria-label="جستجو">
+                    <i class="fal fa-search" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+    </form>
+                        </div>
+
+                                        <div class="col-md-3 dina-user-con">
+                                    <a title="ورود یا ثبت‌نام" href="javascript:void(0)" data-sidebar="open" data-panel="dinaSideLogin" data-direction="right"            class="btn btn-success dina-btn-register dina-merge-btn">
+                <i aria-hidden="true" class="fal fa-user"></i>
+                ورود | ثبت‌نام            </a>
+                            </div>
+
+            </div>
+        </div>
+    </div>
+    <!-- Header Div -->
+
+    <!-- Navbar -->
+        <div class="dina-navbar dina-sticky-nav dina-nav-full">
+        <nav class="navbar navbar-expand-sm dina-focus-nav" itemscope itemtype="https://schema.org/SiteNavigationElement">
+            <div class="container dina-nav-con">
+                <!-- Collect the nav links from WordPress -->
+                <div class="collapse navbar-collapse" id="bootstrap-nav-collapse">
+                    <div class="menu-%d9%81%d9%87%d8%b1%d8%b3%d8%aa-%d8%a7%d8%b5%d9%84%db%8c-container"><ul id="menu-%d9%81%d9%87%d8%b1%d8%b3%d8%aa-%d8%a7%d8%b5%d9%84%db%8c" class="nav navbar-nav dina-mega-menu-style-two dina-menu-rtl dina-menu-hover-top "><li id="menu-item-3501" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-3501 dina-menu-item-has-icon"><a itemprop="url" class="menu-link" href="https://tastebox.ir/shop/"><i class="fal fa-bags-shopping"></i>فروشگاه</a></li>
+<li id="menu-item-3524" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-3524 dina-menu-item-has-icon"><a itemprop="url" class="menu-link" href="https://tastebox.ir/%d8%a7%d8%b1%d8%aa%d8%a8%d8%a7%d8%b7-%d8%a8%d8%a7-%d9%85%d8%a7/"><i class="fal fa-envelope-open-text"></i>ارتباط با ما</a></li>
+</ul></div>                </div><!-- ./collapse -->
+
+                        <a class="btn btn-outline-info dina-menu-bar-btn" href="http://tastebox.ir/order-tracking" title="رهگیری سفارشات">
+            <span class="dina-menu-btn-icon fal fa-shipping-fast"></span>
+            رهگیری سفارشات        </a>
+    
+                        <div class="btn-dina-toggle ">
+            <i aria-hidden="true" class="dina-toggle-icon dina-toggle-dark fal fa-moon" data-toggle="tooltip" data-placement="top" title="حالت تاریک"></i>
+            <i aria-hidden="true" class="dina-toggle-icon dina-toggle-light fal fa-sun" data-toggle="tooltip" data-placement="top" title="حالت روشن"></i>
+        </div>
+                <div class="dina-btn-wish dina-yith-wcwl-btn">
+                <a href="https://tastebox.ir/wishlist/" aria-label="علاقه‌مندی‌ها" rel="nofollow" class="dina-wish-icon" data-toggle="tooltip" data-placement="top" title="علاقه‌مندی‌ها">
+                    <i aria-hidden="true" class="fal fa-heart"></i>
+                    <i class="dina-wish-amount">0</i>
+                </a>
+            </div>
+                <div class="dina-btn-compare">
+            <a href="https://tastebox.ir/%d9%85%d9%82%d8%a7%db%8c%d8%b3%d9%87-%d9%85%d8%ad%d8%b5%d9%88%d9%84%d8%a7%d8%aa/products//" aria-label="مقایسه محصولات" rel="nofollow" class="dina-compare-icon dina-compare-link" data-toggle="tooltip" data-placement="top" title="مقایسه محصولات">
+                <i aria-hidden="true" class="fal fa-shuffle"></i>
+                <i class="dina-compare-amount">0</i>
+            </a>
+        </div>
+            <div class="dina-btn-cart">
+                            <span class="dina-shop-icon" data-toggle="tooltip" data-placement="top" title="سبد خرید" data-sidebar="open" data-panel="dinaSideCart" data-direction="left">
+                    <i aria-hidden="true" class="fal fa-shopping-bag"></i>
+                    <i class="dina-cart-amount">
+                        0                    </i>
+                </span>
+                    </div>
+    
+            </div><!-- /.container -->
+        </nav>
+    </div>
+    <!-- Navbar -->
+
+</header>
+<div class="container dina-main-con">
+
+    <div class="row dina-bread-row"><nav class="col-12 dina-shadow-box dina-breadcrumbs"><a href="https://tastebox.ir" class="breadcrumb-link breadcrumb-link-last">خانه</a><span class="breadcrumb-last"> خرید اینترنت فیبر نوری مخابرات FTTH</span></nav></div>
+    <div class="row dina-page-row">
+
+        
+        <article role="main" class="col-12">
+
+            
+            
+                <div class="dina-shadow-box dina-page-con" id="post-5331" class="post-5331 page type-page status-publish hentry">
+
+                                        <h1 class="dina-ptitle">
+                        خرید اینترنت فیبر نوری مخابرات FTTH                    </h1>
+                    
+                    <div class="entry-content">
+
+                        <h1>اینترنت فیبر نوری مخابرات (FTTH)</h1>
+<p>&nbsp;</p>
+<p><span style="background-color:transparent"><strong>اینترنت فیبر نوری</strong></span><span style="background-color:transparent;color:#000000"> یک اتصال پهن باند است که می‌تواند به سرعت ۹۴۰ مگابیت در ثانیه (Mbps) با زمان تاخیر کم برسد. این فناوری از کابل فیبر نوری استفاده می کند که به طرز شگفت انگیزی می تواند داده ها را با سرعتی در حدود 70 درصد سرعت نور ارسال کند. علاوه بر این، کابل های فیبر نوری به اندازه سایر انواع کابل های سنتی در برابر شرایط آب و هوایی سخت حساس نیستند که این مورد به حداقل رساندن قطع برق کمک کرده و همچنین به طور موثر در برابر تداخل الکتریکی مقاومت می کند. فیبر نوری برای استفاده همزمان چندین کاربر ایده آل است.</span></p>
+<p><span style="background-color:transparent;color:#000000"><strong>اینترنت فیبر نوری چگونه کار می کند؟</strong></span></p>
+<p><span style="background-color:transparent;color:#000000">اینترنت فیبر نوری یک فناوری پیچیده است که امکان انتقال اطلاعات را به شکل نور به جای برق مهیا می سازد. قطعات زیادی این فناوری پیشرفته را تشکیل می دهند، اما دو جزء کلیدی پایه این تکنولوژی هستند:</span></p>
+<p><span style="background-color:transparent;color:#000000">• کابل فیبر نوری</span></p>
+<p><span style="background-color:transparent;color:#000000">فیبرهای نوری ریز هستند. یعنی قطری در حدود 125 میکرون یا کمی بزرگتر از موی انسان. بسیاری از این فیبرها به صورت بسته بندی شده به یکدیگر متصل می شوند تا کابل ها را تشکیل دهند. فیبرهای نوری پالس های لیزر یا نور LED را به سمت پایین حمل می کنند و اطلاعات را به شکل &#8220;دودویی&#8221; منتقل می کنند. شبیه به 0s و 1s مورد استفاده در الکترونیک.</span></p>
+<p><span style="background-color:transparent;color:#000000">• آخرین مایل</span></p>
+<p><span style="background-color:transparent;color:#000000">هنگامی که این پالس‌های نور بسیار سریع به مقصد می‌رسند، به خروجی الکتریکی تبدیل می‌شوند که دستگاه‌های شما می‌توانند آن را بفهمند و از آن استفاده کنند. این کار توسط یک قطعه تجهیزات ویژه به نام «ترمینال شبکه نوری» انجام می شود که سیگنال را از طریق اتصال اترنت به کاربر ارسال می کند. کشش بین خط اصلی شبکه فیبر و کاربر نهایی به عنوان «آخرین مایل» نامیده می شود (اگرچه اغلب بسیار کوتاهتر از یک مایل است).</span></p>
+<p><span style="background-color:transparent;color:#000000">«فیبر خالص» به اتصالات فیبری اشاره دارد که تا خانه، کسب و کار یا رایانه رومیزی کاربر نهایی اجرا می شود. این سریعترین و گرانترین گزینه «آخرین مایل» است، زیرا سرعت و قابلیت اطمینان کامل فیبر را مستقیماً برای مصرف کننده به ارمغان می آورد.</span></p>
+<p><span style="background-color:transparent;color:#000000">به عنوان یک جایگزین، کابل های مسی اغلب برای حمل اتصال فیبر از یک ترمینال به نام «street cabinet» به یک بلوک مسکونی کامل، محوطه دانشگاه یا ساختمان مسکونی استفاده می شود. این گزینه ارزان‌تر است، اما مقدار کمی از سرعت فیبر در «آخرین مایل» از بین می‌رود.</span></p>
+<p style="text-align:center"><span style="background-color:transparent;color:#000000"><img decoding="async" src="https://lh6.googleusercontent.com/ISgy2nF-clvteXlkBmjSdZbtWp7Qwyh8hBi7VlkfaTp8bEw9KxjKGYf1qju1-6K8g4yBiMGMtR-dd8gsDWB5fyfrc7lKCxFaiIPekuXwqwDqSohI7CEX_jiQUyjqAFdPA0EurwKqxQH_8CXXwbFC5ks6vW96AkJ2o37kKONyHEkL-3xComOjq8ujEhmWKg"></span></p>
+<p><span style="background-color:transparent;color:#000000"><strong>تاریخچه اینترنت فیبر نوری</strong></span></p>
+<p><span style="background-color:transparent;color:#000000">اگرچه بسیاری از مردم فیبر نوری را یک فناوری جدید می دانند، اما در واقع به دهه 1970 برمی گردد، زمانی که برای اولین بار در ارتباطات راه دور استفاده شد.</span></p>
+<p><span style="background-color:transparent;color:#000000">در سال 1988، کابل های فیبر نوری در زیر اقیانوس گذاشته شد و ایالات متحده را به اروپا متصل کرد. در طول سال‌ها، خطوط بیشتر و بیشتری در زیر دریا کشیده می‌شد، بنابراین امروزه شبکه عظیمی از کابل‌های فیبر نوری در سراسر جهان گسترش یافته است. شبکه‌های فیبر رو به رشد، با قابلیت‌های پرسرعت و انتقال مطمئن داده‌ها، امکان پیشرفت چشمگیر در حوزه مخابرات را فراهم کرده‌اند. در واقع، برخی می‌گویند فناوری فیبر نوری چیزی است که عصر اطلاعات را ممکن کرد.</span></p>
+<p><span style="background-color:transparent;color:#000000">در کشورهای توسعه‌یافته، خطوط فیبر نوری سال‌ها پیش جایگزین خطوط مسی قدیمی‌تر شدند و هسته یا ستون فقرات شبکه‌های اینترنتی فعلی ما را تشکیل دادند. اخیراً نصب خطوط فیبر نسبت به مسی مقرون به صرفه تر شده است. بنابراین، با پیشرفت این فناوری، شبکه‌های فیبر نوری به سرعت در شهرها و مستقیماً به خانه‌ها در حال گسترش هستند. در ایران نیز فیبر نوری مخابرات در حال گسترش سریع است.</span></p>
+<p style="text-align:center"><span style="background-color:transparent;color:#000000"><img decoding="async" src="https://lh5.googleusercontent.com/Rn4wrJBHvWO9jCIqJghr5n4My-bAY4npo9S4DVQoBSkae2bLqssbX_S199JqhF_g_HfPWQXT41MzD9mj-6COeSRf5rE35X7p73Ux7Ng4UpkiAF2Wmt7iGtnyLaaE3YgnmUEQcBSobcvfDM_36gzRCOz-r_kKFn2yVB3YuRW7hrbg8cOfNLzNFHqrvCoreQ"></span></p>
+<p><span style="background-color:transparent;color:#000000"><strong>اینترنت فیبر نوری چه تفاوتی با سایر انواع اینترنت دارد؟</strong></span></p>
+<p><span style="background-color:transparent;color:#000000">تفاوت اصلی این است که فیبر مانند سایر انواع اتصالات اینترنتی از جریان الکتریکی استفاده نمی کند. بلکه از نور استفاده می کند که از طریق هسته فایبر گلاس منتقل می شود.</span></p>
+<p><span style="background-color:transparent;color:#000000">فناوری های اینترنتی در طول زمان به طور چشمگیری تکامل یافته اند. در اینجا خلاصه ای کوتاه از انواع اصلی اتصالاتی که هنوز استفاده می شوند و نحوه کار آنها آورده شده است:</span></p>
+<p><span style="background-color:transparent;color:#000000">• اینترنت Dial-Up</span></p>
+<p><span style="background-color:transparent;color:#000000">Dial-up، که بسیار کمتر از 20 سال پیش رایج شد، از خطوط تلفن موجود استفاده می کند که معمولاً از مس ساخته شده اند. Dial-up از فرکانس شنیداری تلفن ثابت استفاده می کند، به همین دلیل است که هنگام اتصال یک سری بوق و صدا می شنوید و نمی توانید همزمان از تلفن و اینترنت استفاده کنید. چراکه هر دو یک خط مشترک دارند. سرعت متوسط Dial-Up حدود 56 کیلوبیت در ثانیه (یعنی حدود 0.05 مگابیت در ثانیه) برای دانلود و آپلود است.</span></p>
+<p><span style="background-color:transparent;color:#000000">• اینترنت DSL</span></p>
+<p><span style="background-color:transparent;color:#000000">اینترنت DSL (خط مشترک دیجیتال) نیز از خطوط تلفن برای انتقال داده ها استفاده می کند. اما برخلاف Dial-up، DSL از فرکانس های نامفهوم استفاده می کند، بنابراین با سرویس تلفن صوتی شما تداخل ندارد. سرعت متوسط DSL بین 1 تا 100 مگابیت در ثانیه برای دانلود و حداکثر 20 مگابیت در ثانیه برای آپلود است.</span></p>
+<p><span style="background-color:transparent;color:#000000">• اینترنت کابلی</span></p>
+<p><span style="background-color:transparent;color:#000000">اینترنت کابلی از همان خط (یا حداقل از همان نوع خط) استفاده می‌کند که سرویس تلویزیون کابلی شما از آن استفاده می‌کند که به عنوان «کابل کواکسیال» شناخته می‌شود. سرعت اینترنت کابلی می تواند بسیار متفاوت باشد، به طور متوسط تا 940 مگابیت در ثانیه برای دانلود و تا 50 مگابیت در ثانیه برای آپلود.</span></p>
+<p><span style="background-color:transparent;color:#000000"><strong>آیا اینترنت فیبر نوری سریعتر است؟</strong></span></p>
+<p><span style="background-color:transparent;color:#000000">اتصالات اینترنت پرسرعت، داده ها را با سرعت های مختلف انتقال می دهند. فیبر نوری علاوه بر سریع‌تر بودن، به‌طور گسترده‌ای قابل اطمینان‌تر نیز در نظر گرفته می‌شود و یک انتخاب عالی برای افراد دورکار، گیمرها، خانواده‌های چند کاربره و مشاغل است.</span></p>
+<p><span style="background-color:transparent;color:#000000">در فکر کردن به سرعت، نمی توانید تأثیر وای فای را نادیده بگیرید. سرعت اتصال روزمره ای که تجربه می کنید می تواند با استفاده از فناوری بی سیم محدود شود. سرعتی که در مقایسه با اتصال سیمی که وارد روتر شما می شود، به دلیل از دست دادن قدرت سیگنال، کمتر است.</span></p>
+<p style="text-align:center"><span style="background-color:transparent;color:#000000"><img decoding="async" src="https://lh3.googleusercontent.com/e_Z5-FSWRbxtW3ST15HByVLwwppt9DJfCBnTphqEXvBbYYrPdlU5TYWcq3REBbJCbowr9rDafNAcqiUyex4lJZeVvL_-m5ch8bJnHe7ldtbe7yxMXajYYekJhc-IcKoWhZxNQhiafpcoJOxVou-bwZTJS4qYhaC2levLgMYeqeC0eRM2dOjjl4htyj3GVw"></span></p>
+<p><span style="background-color:transparent;color:#000000"><strong>مزایای اینترنت فیبر نوری برای کاربران اینترنت چیست؟</strong></span></p>
+<p><span style="background-color:transparent;color:#000000">اینترنت فیبر یک انتخاب عالی برای استفاده از پهنای باند بالا است که در آن چندین کاربر می‌خواهند ویدیو پخش کنند، بازی‌های آنلاین انجام دهند، از داده‌ها نسخه پشتیبان تهیه کنند، یا فایل‌های بزرگ را به‌خصوص در فواصل طولانی ارسال و دریافت کنند. یک خانه متصل به فیبر می‌تواند تجربه‌ای استثنایی را در همه دستگاه‌ها و سیستم‌های متصل به اینترنت، از امنیت خانه گرفته تا ترموستات‌های هوشمند، اجاق‌ها، یخچال‌ها و سایر لوازم ارائه دهد.</span></p>
+<p><span style="background-color:transparent;color:#000000">با سرعت‌های بالاتر، با پخش بر اساس تقاضا نیز بافر زیادی دریافت نمی‌کنید. &#8220;Buffering&#8221; به زمان بارگیری اشاره دارد. مثلا زمانی که یک ویدیو متوقف می‌شود تا دوباره بارگیری شود.&nbsp;</span></p>
+<p><span style="background-color:transparent;color:#000000">برای درک بهتر سرعت اینترنت فیبر نوری، طور متوسط مدت زمان لازم برای دانلود یک فایل رسانه ای بزرگ (6.5 گیگابایت) بر اساس نوع اینترنت به صورت زیر است:</span></p>
+<p><span style="background-color:transparent;color:#000000">Dial-Up: 11 روزه</span></p>
+<p><span style="background-color:transparent;color:#000000">DSL: 1 تا 14 ساعت</span></p>
+<p><span style="background-color:transparent;color:#000000">کابلی: 1 دقیقه تا 14 ساعت</span></p>
+<p><span style="background-color:transparent;color:#000000">فیبر نوری: حدود 1 دقیقه</span></p>
+<p><span style="background-color:transparent;color:#000000"><strong>فیبر تیره چیست؟</strong></span></p>
+<p><span style="background-color:transparent;color:#000000">ممکن است اصطلاحات «فیبر تیره» و «فیبر روشن» را شنیده باشید و تعجب کنید که معنی آنها چیست. شاید تعجب کنید که بدانید بزرگترین بخش هزینه ساخت یک شبکه فیبر نوری خود کابل نیست، بلکه هزینه کندن زمین برای دفن کابل است. بنابراین، هنگامی که حفاری را کامل می کنند، بسیاری از شرکت‌های مخابراتی کابل‌های فیبر نوری اضافی را برای توسعه در آینده نصب می‌کنند. «فیبر تیره» به کابل‌هایی اطلاق می‌شود که هنوز استفاده نمی‌شوند، در حالی که «فیبر روشن» به خطوطی اطلاق می‌شود که قبلاً متصل شده‌اند و توسط شرکت‌های مخابراتی برای ارائه خدمات اینترنت فیبر استفاده می‌شوند.</span></p>
+<p style="text-align:center"><span style="background-color:transparent;color:#000000"><img decoding="async" src="https://lh6.googleusercontent.com/DO-7IYziDl6eX_2p2aaQM66-IwrzOYRPT4srDaBWeAHNz3ZmWmR0KJ1dnHNtSC8SOoaRrAo3ULZ1PAASv9nubYDKgJJC6T4OfH6a_xaFoxViYmKLT_DINUSl02gyw3B6MiSc66LoOQ7GPL6fYlSQgBlGCA7OYgmvXnt4GYleJZx5eWsm-tYjMb9NN0e_Zw"></span></p>
+<p><span style="background-color:transparent;color:#000000"><strong>قیمت مودم فیبر نوری</strong></span></p>
+<p><span style="background-color:transparent"><strong>مودم فیبر نوری</strong></span><span style="background-color:transparent;color:#000000"> تقریبا به همان شکل مودم های ADSL است. اما قیمت بیشتری دارند و دلیل آن هم تکنولوژی و اتصالاتی است که برای سازگاری با اینترنت فیبر نوری در آن استفاده شده. اگر کمی دقیق تر بخواهید بدانید، قیمت مودم فیبر نوری حداقل 30 درصد از مودم های معمولی و ADSL بیشتر است. حال اگر فیبر نوری مخابرات را گرفته یا می خواهید تهیه کنید، بهتر است کمی بیشتر هزینه کرده تا از سرعت بالاتری بهره مند شوید.</span></p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<p>ایتانت برترین ارائه دهنده خدمات اینترنت فیبر نوری مخابرات ftth در ایران می باشد. شما می توانید خدمات اینترنت فیبر نوری را در این صفحه خریداری کنید و از سرعت بی نظیر این سرویس در فعالیت های روزانه خود در اینترنت لذت ببرید!</p>
+<p>فیبر نوری</p>
+<p>مودم فیبر نوری</p>
+<p><strong>فیبر نوری مخابرات</strong></p>
+<p><strong>اینترنت فیبر نوری</strong></p>
+<p>کابل فیبر نوری</p>
+<p>اینترنت فیبر نوری مخابرات</p>
+<p>فیبر نوری چیست</p>
+<p>قیمت فیبر نوری</p>
+<p><strong>خرید اینترنت فیبر نوری</strong></p>
+<p>خرید مودم فیبر نوری</p>
+<p>خرید فیبر نوری</p>
+<p>قیمت مودم فیبر نوری</p>
+<p>فیبر نوری اینترنت</p>
+<p><strong>قیمت فیبر نوری مخابرات</strong></p>
+<p>فیبر نوری مخابرات چیست</p>
+<p>چگونه اینترنت فیبر نوری بگیریم</p>
+<p>خرید فیبر نوری مخابرات</p>
+<p>فیبر نوری منازل</p>
+<p>نت فیبر نوری</p>
+<p><strong>ثبت نام فیبر نوری مخابرات اصفهان</strong></p>
+<p>ثبت نام فیبر نوری مخابرات تهران</p>
+<p>ثبت نام فیبر نوری اصفهان</p>
+                        
+                        
+                    </div>
+
+                                    </div>
+
+            
+            
+            
+        </article>
+
+                
+    </div>
+
+</div>
+
+
+<!-- Footer Area -->
+
+
+<footer class="container-fluid dina-sfooter">
+
+        
+    <div class="container">
+
+        
+        
+        <div class="row dina-info-bar"><div class="dina-info-icon col"><i class="fal fa-shopping-bag" aria-hidden="true"></i><span class="dina-count-num">1+</span><span class="dina-count-text">محصولات</span></div><div class="dina-info-icon col"><i class="fal fa-box-check" aria-hidden="true"></i><span class="dina-count-num">0+</span><span class="dina-count-text">سفارشات تکمیل شده</span></div><div class="dina-info-icon col"><i class="fal fa-users" aria-hidden="true"></i><span class="dina-count-num">2+</span><span class="dina-count-text">کاربران</span></div><div class="dina-info-icon col"><i class="fal fa-file-alt" aria-hidden="true"></i><span class="dina-count-num">6+</span><span class="dina-count-text">مطالب وبلاگ</span></div></div>
+        
+                <div class="row dina-footer-widgets">
+        <div class="col-lg-3 col-md-6 col-12 dina-footer-widget dina-footer-widget-1"><div id="dina-post-5" class="dina-post_widget"><h3 class="dina-footer-widget-title">آخرین نوشته ها</h3>
+      <ul class="dina-widget-list">
+                     <li>
+               <a href="https://tastebox.ir/%d8%aa%db%8c%d9%85-%d8%b4%d9%86%d8%a7%db%8c-%d8%a7%d9%84%d9%85%d9%be%db%8c%da%a9-%d8%a7%d8%b3%d8%aa%d8%b1%d8%a7%d9%84%db%8c%d8%a7-%d8%a7%d9%be%d9%84-%d9%88%d8%a7%da%86-%d9%86%d9%82%d8%b4-%d9%85%d9%87/" rel="bookmark" title="تیم شنای المپیک استرالیا: اپل واچ نقش مهمی در موفقیت ما داشته است" target="_self">
+               <span class="dina-post-image">
+                  <img src="https://tastebox.ir/wp-content/themes/dinakala/images/thumb.png" width="150" height="150" alt="تیم شنای المپیک استرالیا: اپل واچ نقش مهمی در موفقیت ما داشته است" class="dina-post-thumb">               </span>
+               <span class="dina-widget-post-title">
+                  تیم شنای المپیک استرالیا: اپل واچ نقش مهمی در موفقیت ما داشته است               </span>
+               <span class="dina-widget-post-desc">
+                     ۱۱ شهریور ۱۳۹۸               </span>
+               </a>
+            </li>
+                     <li>
+               <a href="https://tastebox.ir/%da%a9%d8%a7%d9%86%d8%b3%d9%be%d8%aa-%d8%a2%da%a9%db%8c%d9%88%d8%b1%d8%a7-precision-ev-%d9%85%d8%b9%d8%b1%d9%81%db%8c-%d8%b4%d8%af%d8%9b-%d8%a7%d9%88%d9%84%db%8c%d9%86-%d9%85%d8%af%d9%84-%d8%a8%d8%b1/" rel="bookmark" title="کانسپت آکیورا Precision EV معرفی شد؛ اولین مدل برقی از نگاه شاخه لوکس هوندا" target="_self">
+               <span class="dina-post-image">
+                  <img src="https://tastebox.ir/wp-content/themes/dinakala/images/thumb.png" width="150" height="150" alt="کانسپت آکیورا Precision EV معرفی شد؛ اولین مدل برقی از نگاه شاخه لوکس هوندا" class="dina-post-thumb">               </span>
+               <span class="dina-widget-post-title">
+                  کانسپت آکیورا Precision EV معرفی شد؛ اولین مدل برقی از نگاه شاخه لوکس هوندا               </span>
+               <span class="dina-widget-post-desc">
+                     ۱۱ شهریور ۱۳۹۸               </span>
+               </a>
+            </li>
+                     <li>
+               <a href="https://tastebox.ir/%da%af%d9%84%da%a9%d8%b3%db%8c-%d9%81%d9%88%d9%84%d8%af-%db%b2-%d8%a7%d8%ad%d8%aa%d9%85%d8%a7%d9%84%d8%a7-%d8%af%d8%b1-%d8%b1%d9%88%d8%b2-%d9%86%d8%ae%d8%b3%d8%aa-ifa-2019-%d8%b1%d9%88%d9%86%d9%85/" rel="bookmark" title="احتمال استفاده از دوربین 200 مگاپیکسلی در گلکسی S23 اولترا قوت گرفت" target="_self">
+               <span class="dina-post-image">
+                  <img src="https://tastebox.ir/wp-content/themes/dinakala/images/thumb.png" width="150" height="150" alt="احتمال استفاده از دوربین 200 مگاپیکسلی در گلکسی S23 اولترا قوت گرفت" class="dina-post-thumb">               </span>
+               <span class="dina-widget-post-title">
+                  احتمال استفاده از دوربین 200 مگاپیکسلی در گلکسی S23 اولترا قوت گرفت               </span>
+               <span class="dina-widget-post-desc">
+                     ۱۱ شهریور ۱۳۹۸               </span>
+               </a>
+            </li>
+               </ul>
+      </div></div><div class="col-lg-3 col-md-6 col-12 dina-footer-widget dina-footer-widget-2"><div id="epay_widget-2" class="widget_epay_widget"><h3 class="dina-footer-widget-title">پرداخت آنلاین</h3><ul class="dina-bank-logo-list"><li class="dina-bank-logo dina-bank-logo1"></li><li class="dina-bank-logo dina-bank-logo2"></li><li class="dina-bank-logo dina-bank-logo3"></li><li class="dina-bank-logo dina-bank-logo4"></li><li class="dina-bank-logo dina-bank-logo5"></li><li class="dina-bank-logo dina-bank-logo6"></li><li class="dina-bank-logo dina-bank-logo7"></li><li class="dina-bank-logo dina-bank-logo8"></li><li class="dina-bank-logo dina-bank-logo9"></li><li class="dina-bank-logo dina-bank-logo10"></li><li class="dina-bank-logo dina-bank-logo11"></li><li class="dina-bank-logo dina-bank-logo12"></li><li class="dina-bank-logo dina-bank-logo13"></li><li class="dina-bank-logo dina-bank-logo14"></li><li class="dina-bank-logo dina-bank-logo15"></li><li class="dina-bank-logo dina-bank-logo16"></li></ul></div></div><div class="col-lg-3 col-md-6 col-12 dina-footer-widget dina-footer-widget-3"><div id="dina-fnews_widget-2" class="widget_dina-fnews_widget"><h3 class="dina-footer-widget-title">عضویت در خبرنامه</h3>
+        <div class="dina-feedburner">
+            <i class="fal fa-envelope-open-text dina-newsletter-icon" aria-hidden="true"></i>
+            <div class="dina-newsletter-text">
+                با عضویت در خبرنامه از آخرین پیشنهادها و تخفیف های ما زودتر از بقیه با خبر شوید!            </div>
+
+            <form action="https://feedburner.google.com/fb/a/mailverify" method="post" target="popupwindow" onsubmit="window.open( 'https://feedburner.google.com/fb/a/mailverify?uri=', 'popupwindow', 'scrollbars=yes,width=550,height=520' );return true" class="form-inline dina-feed-form">
+                <div class="input-group dina-news-form">
+                    <div class="input-group-prepend">
+                        <span class="input-group-text">
+                            <i class="fal fa-envelope" aria-hidden="true"></i>
+                        </span>
+                    </div>
+                    <input name="email" id="dina-feedemail" type="text" class="form-control dina-newsletter-input" aria-label="ایمیل" required placeholder="ایمیل خود را وارد نمایید ..." autocomplete="email">
+                    <input type="hidden" value="" name="uri"/>
+                    <input type="hidden" name="loc" value="en_US"/>
+                    <div class="input-group-append">
+                        <button class="btn btn-primary dina-newsletter-button" type="submit" aria-label="ثبت‌نام">
+                            ثبت‌نام                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        </div></div><div class="col-lg-3 col-md-6 col-12 dina-footer-widget dina-footer-widget-4"><div id="logo-namad-2" class="logo-namad_widget"><h3 class="dina-footer-widget-title">نمادهای ما</h3><div class="row dina-namad-row"><div class="col dina-namad-con"><img src="http://tastebox.ir/wp-content/uploads/2023/04/namad.png" class="namad-img" alt="نماد اعتماد"></div><div class="col dina-namad-con"><img src="http://tastebox.ir/wp-content/uploads/2019/08/samandehi-logo.png" class="namad-img" alt="ساماندهی"></div></div></div></div>        </div>
+        
+        
+                        <div class="row dina-footer-addr">
+            <div class="col-md-9 col-12 dina-addr-con">
+                                <div class="dina-addr-text col-md-7 col-12"><i class="fal fa-map-marker-alt" aria-hidden="true"></i>
+                    استان تهران، شهر تهران، خیابان مرکزی، ساختمان مرکزی، پلاک 7                </div>
+                                <div class="dina-ftel col-md-5 col-12">
+                    
+                                                                    <a href="tel:09123332222" target="_blank">
+                                                    <span class="dina-foot-tel">
+                                <i class="fal fa-phone" aria-hidden="true"></i>
+                                <span class="dina-top-val" id="site-tel">09123332222</span>
+                            </span>
+                                                </a>
+                                            
+                                                                                                    <a href="mailto:info@site.com" target="_blank">
+                                                            <span class="dina-foot-tel">
+                                    <i class="fal fa-envelope" aria-hidden="true"></i>
+                                    <span class="dina-top-val" id="site-email">info@site.com</span>
+                                </span>
+                                                        </a>
+                                                                                            
+                </div>
+            </div>
+
+                        <div class="col-md-3 col-12 dina-apps-icon">
+                                <a href="#" rel="nofollow" class="btn btn-outline-success dina-and-btn">
+                    <i class="fab fa-android" aria-hidden="true"></i>
+                    نسخه اندروید                </a>
+                                                <a href="#" rel="nofollow" class="btn btn-outline-secondary dina-ios-btn">
+                    <i class="fab fa-apple" aria-hidden="true"></i>
+                    نسخه IOS                </a>
+                            </div>
+                        
+        </div>
+        
+        
+    </div>
+</footer>
+<!-- Footer Area -->
+
+<!-- Copyright area -->
+<div class="container-fluid dina-copyright">
+    <div class="container">
+        <div class="row">
+        <div class="col-md-6 col-12 dina-copyright-text">
+            <div class="dina-copyright-text-inner">
+                تمامی حقوق برای سایت ما محفوظ است.            </div>
+        </div>
+                        <div class="col-md-6 col-12 dina-social-footer">
+            <ul class="dina-footer-social-circle">
+<li><a href="#" title="فیسبوک" target="_blank"><i class="fab fa-facebook-f" aria-hidden="true"></i></a></li>
+<li><a href="#" title="واتساپ" target="_blank"><i class="fab fa-whatsapp" aria-hidden="true"></i></a></li>
+<li><a href="#" title="تلگرام" target="_blank"><i class="fab fa-telegram-plane" aria-hidden="true"></i></a></li>
+<li><a href="#" title="اینستاگرام" target="_blank"><i class="fab fa-instagram" aria-hidden="true"></i></a></li>
+<li><a href="#" title="یوتیوب" target="_blank"><i class="fab fa-youtube" aria-hidden="true"></i></a></li>
+<li><a href="#" title="آپارات" target="_blank"><i class="dico ico-aparat" aria-hidden="true"></i></a></li>
+<li><a href="#" title="سروش" target="_blank"><i class="dico ico-Soroush" aria-hidden="true"></i></a></li>
+</ul>
+        </div>
+                </div>
+    </div>
+</div>
+<!-- Copyright area -->        <div id="dina-back-top">
+            <a href="#top">
+                <i class="fal fa-chevron-up" aria-hidden="true"></i>
+            </a>
+        </div>
+    <script type="speculationrules">
+{"prefetch":[{"source":"document","where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":["/wp-*.php","/wp-admin/*","/wp-content/uploads/*","/wp-content/*","/wp-content/plugins/*","/wp-content/themes/dinakala/*","/*\\?(.+)"]}},{"not":{"selector_matches":"a[rel~=\"nofollow\"]"}},{"not":{"selector_matches":".no-prefetch, .no-prefetch a"}}]},"eagerness":"conservative"}]}
+</script>
+    <!-- Modal -->
+    <div class="modal fade bd-example-modal-lg" id="dinaPostModal" tabindex="-1" role="dialog" aria-labelledby="dinaPostModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-title" id="dinaPostModalLabel"></div>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <i class="fal fa-times" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <div class="modal-body woocommerce">
+                    <div class="container-fluid single-product dina-product-quick-view">
+                        <div class="row product">
+
+                            <div class="col-md-5 dina-quick-gallery">
+                            </div>
+
+                            <div class="col-md-7 summary entry-summary scrollable">
+                                <div class="summary-content">   
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="dina-overlay-blur"></div>
+
+    <div id="dinaGlobalCanvas" class="dina-canvas" data-close-sidebar></div>
+
+            <!-- side cart -->
+                <div id="dinaSideCart" class="dina-side-cart dina-side-panel dina-open-side" data-direction="left">
+        
+            <div class="dina-side-head">
+                <span class="dina-mclosebtn" aria-label="بستن" data-close-sidebar>
+                    <i class="fal fa-times" aria-hidden="true"></i>
+                </span>
+                <div class="dina-side-title">
+                    <i class="fal fa-shopping-bag" aria-hidden="true"></i> سبد خرید                </div>
+            </div>
+
+            
+            <div class="widget_shopping_cart_content">
+                 
+ 
+	<p class="woocommerce-mini-cart__empty-message">سبد خرید شما خالی است.</p>
+
+
+            </div>
+            
+            
+                                                <i class="fal fa-bags-shopping dina-side-icon" aria-hidden="true"></i>
+            
+        </div>
+        <!-- side cart -->
+    
+        <!-- side login -->
+    <div id="dinaSideLogin" class="dina-side-login dina-side-panel" data-direction="right">
+        <div class="dina-side-head">
+            <span class="dina-mclosebtn" aria-label="بستن" data-close-sidebar>
+                <i class="fal fa-times" aria-hidden="true"></i>
+            </span>
+            <div class="dina-side-title">
+                <i class="fal fa-user-circle" aria-hidden="true"></i> ورود به سایت            </div>
+        </div>
+        
+        
+        <div class="dina-login-wrapper dina-ajax-form-wrapper d-block">
+
+                            <form name="login_form" class="d-block dina-login-form" id="dina_login_form" method="post">
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="status"></div>
+                            <div class="form-group">
+                                <i class="fal fa-user" aria-hidden="true"></i>
+                                <input name="username" type="text" class="form-control" id="username" autocomplete="email" placeholder="نام کاربری یا نشانی ایمیل" required="required" />
+                            </div>
+                            <div class="form-group">
+                                <i class="fal fa-key" aria-hidden="true"></i>
+                                <input name="password" type="password" class="form-control" id="password" placeholder="رمزعبور" required="required" />
+                                <i class="fal fa-eye dina-show-password" aria-hidden="true"></i>
+                            </div>
+                            <div class="dina-login-links">
+
+                                                                    <a href="https://tastebox.ir/my-account/lost-password/" title="بازنشانی گذرواژه" class="lost-password">بازنشانی گذرواژه</a>
+                                
+                                                                                                            <span class="dina-show-register-form">ایجاد حساب کاربری</span>
+                                                                    
+                            </div>
+
+                                    <div class="dina-captcha" data-captcha-id="login_891b65f1-2dd6-4ec5-98a5-0b8fe24f9e94">
+
+            <img
+                class="dina-captcha-img"
+                src="?dina-math-captcha=1&cid=login_891b65f1-2dd6-4ec5-98a5-0b8fe24f9e94"
+                data-captcha-id="login_891b65f1-2dd6-4ec5-98a5-0b8fe24f9e94"
+                alt="captcha"
+                width="160"
+                height="50"
+            >
+
+            <button
+                type="button"
+                class="btn btn-light dina-captcha-reload"
+                data-captcha-id="login_891b65f1-2dd6-4ec5-98a5-0b8fe24f9e94"
+                aria-label="بارگذاری مجدد کپچا"
+            >
+                <i class="fal fa-arrow-rotate-right" aria-hidden="true"></i>
+            </button>
+
+            <input
+                type="text"
+                class="dina-captcha-answer col-12"
+                name="dina_captcha_answer[login_891b65f1-2dd6-4ec5-98a5-0b8fe24f9e94]"
+                placeholder="پاسخ را وارد نمایید"
+                autocomplete="off"
+                required
+            >
+
+        </div>
+        
+                            <input type="hidden" name="redirect-to" value="https://tastebox.ir/ftth/">
+                            <input type="hidden" id="ajax_login_elogin" name="ajax_login_elogin" value="6ee8bdd935" /><input type="hidden" name="_wp_http_referer" value="/ftth/" />                            <button class="btn btn-success dina-login-form-button" id="loginSubmit">
+                                <i class="fal fa-user btn-icon" aria-hidden="true"></i>ورود به سایت                            </button>
+                                                    </div>
+                    </div>
+                </form>
+            
+            
+        </div>
+
+                    <div class="dina-register-wrapper dina-ajax-form-wrapper d-none">
+                <form name="register_form" class="d-block dina-login-form" id="dina_register_form" method="post">
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="status"></div>
+
+                                                        <div class="form-group">
+                                <i class="fal fa-id-card" aria-hidden="true"></i>
+                                <input name="fname" type="text" class="form-control" id="reg_fname" autocomplete="name" placeholder="نام" />
+                            </div>
+                            
+                                                        <div class="form-group">
+                                <i class="fal fa-id-card" aria-hidden="true"></i>
+                                <input name="lname" type="text" class="form-control" id="reg_lname" autocomplete="family-name" placeholder="نام خانوادگی" />
+                            </div>
+                            
+                                                        <div class="form-group">
+                                <i class="fal fa-user" aria-hidden="true"></i>
+                                <input name="username" type="text" class="form-control" id="reg_username" placeholder="نام کاربری" required="required" />
+                            </div>
+                            
+                                                        <div class="form-group">
+                                <i class="fal fa-key" aria-hidden="true"></i>
+                                <input name="password" type="password" class="form-control" id="reg_password" placeholder="رمزعبور" required="required" />
+                                <i class="fal fa-eye dina-show-password" aria-hidden="true"></i>
+                            </div>
+                            
+                                                        <div class="form-group">
+                                <i class="fal fa-mobile" aria-hidden="true"></i>
+                                <input name="mobile_number" type="text" autocomplete="tel" class="form-control dina-mobile-number" id="reg_mobile_number" placeholder="شماره موبایل" pattern=".{11}" maxlength="11" inputmode="numeric" />
+                            </div>
+                            
+                                                        <div class="form-group">
+                                <i class="fal fa-at" aria-hidden="true"></i>
+                                <input name="email" type="email" class="form-control" id="reg_email" autocomplete="email" placeholder="ایمیل" required="required" />
+                            </div>
+                            
+                            
+                                                        
+                            <div class="dina-login-links">
+
+                                                                    <a href="https://tastebox.ir/my-account/lost-password/" title="بازنشانی گذرواژه" class="lost-password">بازنشانی گذرواژه</a>
+                                
+                                <span class="dina-show-login-form">ورود به سایت</span>
+                                
+                            </div>
+
+                                    <div class="dina-captcha" data-captcha-id="register_791f862a-2429-4abf-9f3b-65f68edafc46">
+
+            <img
+                class="dina-captcha-img"
+                src="?dina-math-captcha=1&cid=register_791f862a-2429-4abf-9f3b-65f68edafc46"
+                data-captcha-id="register_791f862a-2429-4abf-9f3b-65f68edafc46"
+                alt="captcha"
+                width="160"
+                height="50"
+            >
+
+            <button
+                type="button"
+                class="btn btn-light dina-captcha-reload"
+                data-captcha-id="register_791f862a-2429-4abf-9f3b-65f68edafc46"
+                aria-label="بارگذاری مجدد کپچا"
+            >
+                <i class="fal fa-arrow-rotate-right" aria-hidden="true"></i>
+            </button>
+
+            <input
+                type="text"
+                class="dina-captcha-answer col-12"
+                name="dina_captcha_answer[register_791f862a-2429-4abf-9f3b-65f68edafc46]"
+                placeholder="پاسخ را وارد نمایید"
+                autocomplete="off"
+                required
+            >
+
+        </div>
+        
+                            <input type="hidden" name="redirect-to" value="https://tastebox.ir/ftth/">
+                            <input type="hidden" id="ajax_register" name="ajax_register" value="6ee8bdd935" /><input type="hidden" name="_wp_http_referer" value="/ftth/" />                            <button class="btn btn-success dina-login-form-button" id="registerSubmit">
+                                <i class="fal fa-user-plus btn-icon" aria-hidden="true"></i>ایجاد حساب کاربری                            </button>
+
+                        </div>
+                    </div>
+                </form>
+            </div>
+        
+                
+                                    <i class="fal fa-user-circle dina-side-icon" aria-hidden="true"></i>
+        
+    </div>
+    <!-- side login -->
+    
+    
+    <!-- mobile menu -->
+    <div id="dinaNav" class="dina-side-nav dina-side-panel" data-direction="right">
+        <div class="dina-side-head">
+
+            <span class="dina-mclosebtn" aria-label="بستن" data-close-sidebar>
+                <i class="fal fa-times" aria-hidden="true"></i>
+            </span>
+
+                    <div class="btn-dina-toggle dina-toggle-mobile">
+            <i aria-hidden="true" class="dina-toggle-icon dina-toggle-dark fal fa-moon"  title="حالت تاریک"></i>
+            <i aria-hidden="true" class="dina-toggle-icon dina-toggle-light fal fa-sun"  title="حالت روشن"></i>
+        </div>
+        <a href="https://tastebox.ir" title="ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ) | ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ)" class="dina-logo-link" rel="home">
+
+        
+        <img         src="https://tastebox.ir/wp-content/uploads/2026/07/itanetlogo.png"
+        srcset="https://tastebox.ir/wp-content/uploads/2026/07/itanetlogo320x114.png 2x"
+        width="160"
+        height="57"
+        alt="ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ) | ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ)"
+        title="ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ) | ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ)"
+        class="dina-img-logo dina-light-logo dina-mobile-menu-logo" fetchpriority="high"/>
+
+        
+            <img itemprop="logo"            src="https://tastebox.ir/wp-content/uploads/2023/03/dark-logo.png"
+            srcset="https://tastebox.ir/wp-content/uploads/2023/03/dark-logo2x.png 2x"
+            width="160"
+            height="57"
+            alt="ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ) | ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ)"
+            title="ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ) | ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ)"
+            class="dina-img-logo dina-dark-logo dina-mobile-menu-logo" fetchpriority="high"/>
+
+        
+            </a>
+    <form class="msform dina-search-bar" role="search" method="get" action="https://tastebox.ir/">
+                    <input type="hidden" name="post_type" value="product" />
+                <div class="input-group search-form dina-ajax-search-wrapper">
+                                <div class="input-group-before dina-prod-cat">
+                        <select  name='product_cat' id='dina-mobile-search-cat' class='product_cat'>
+	<option value='0' selected='selected'>دسته‌بندی</option>
+	<option class="level-0" value="uncategorized">بدون دسته‌بندی</option>
+</select>
+                    </div>
+                    
+                        <input autocomplete="off" name="s" type="text" class="form-control dina-search-input" placeholder="جستجو در محصولات..." aria-label="جستجو" required>
+            <div class="input-group-append">
+                <button class="btn dina-btn-search" type="submit" aria-label="جستجو">
+                    <i class="fal fa-search" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+    </form>
+    
+        </div>
+        
+       
+        <nav id="dina-mobile-menu-walker" class="dina-mobile-menu" itemscope itemtype="https://schema.org/SiteNavigationElement">
+            <div id="dina-mobile-menu-walker" class="menu-%d9%81%d9%87%d8%b1%d8%b3%d8%aa-%d8%a7%d8%b5%d9%84%db%8c-container"><ul id="menu-%d9%81%d9%87%d8%b1%d8%b3%d8%aa-%d8%a7%d8%b5%d9%84%db%8c-1" class="menu"><li class="menu-item menu-item-type-post_type menu-item-object-page dina-menu-item-has-icon"><span><a itemprop="url" href="https://tastebox.ir/shop/"><i class="fal fa-bags-shopping"></i>فروشگاه</a></span></li>
+<li class="menu-item menu-item-type-post_type menu-item-object-page dina-menu-item-has-icon"><span><a itemprop="url" href="https://tastebox.ir/%d8%a7%d8%b1%d8%aa%d8%a8%d8%a7%d8%b7-%d8%a8%d8%a7-%d9%85%d8%a7/"><i class="fal fa-envelope-open-text"></i>ارتباط با ما</a></span></li>
+</ul></div>       </nav>
+
+       
+                                    <i class="fal fa-file-search dina-side-icon" aria-hidden="true"></i>
+        
+    </div>
+    <!-- mobile menu -->
+
+        <div class="dina-mobile-footer dina-mobile-footer-title dina-mobile-footer-style-none">
+        <ul>
+                                <li class="dina-return-top">
+                        <span aria-hidden="true" class="dina-mobile-footer-icon fal fa-chevron-up" title="بازگشت">
+                    </span>
+            <span class="dina-mobile-footer-title">بازگشت</span>
+                </li>
+                        <li class="dina-nav-wishlist">
+                    <a href="https://tastebox.ir/wishlist/" title="علاقه‌مندی‌ها" rel="nofollow">
+                                <span aria-hidden="true" class="dina-mobile-footer-icon fal fa-heart" title="علاقه مندی ها">
+            <span class="dina-wish-amount">0</span>        </span>
+            <span class="dina-mobile-footer-title">علاقه مندی ها</span>
+                        </a>
+                </li>
+                    <li class="dina-go-to-home">
+            <a href="https://tastebox.ir" title="ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ) | ایتانت: اینترنت مخابرات ADSL 2020 (خرید سرویس و شارژ)">
+                        <span aria-hidden="true" class="dina-mobile-footer-icon fal fa-home" title="صفحه اصلی">
+                    </span>
+            <span class="dina-mobile-footer-title">صفحه اصلی</span>
+                </a>
+        </li>
+                    <li class="dina-wccm-compare">
+            <a href="https://tastebox.ir/%d9%85%d9%82%d8%a7%db%8c%d8%b3%d9%87-%d9%85%d8%ad%d8%b5%d9%88%d9%84%d8%a7%d8%aa/products//" class="dina-compare-link" rel="nofollow" title="مقایسه ">
+                        <span aria-hidden="true" class="dina-mobile-footer-icon fal fa-random" title="مقایسه محصولات">
+            <span class="dina-compare-amount">0</span>        </span>
+            <span class="dina-mobile-footer-title">مقایسه محصولات</span>
+                </a>
+        </li>
+                                <li class="dina-nav-cart" data-sidebar="open" data-panel="dinaSideCart" data-direction="left">
+                        <span aria-hidden="true" class="dina-mobile-footer-icon fal fa-shopping-bag" title="سبد خرید">
+            <span class="dina-cart-amount">0</span>        </span>
+            <span class="dina-mobile-footer-title">سبد خرید</span>
+                </li>
+                    </ul>
+    </div>
+
+    <div class="dina-socialbtn dina-social-left dina-social-first-style dina-social-desktop dina-social-square-style">
+
+                        <span class="dina-socialbtn-title">
+                    کانال تلگرام ما را دنبال کنید                </span>
+                        <a class="dina-first-socialbtn" aria-label="کانال تلگرام ما را دنبال کنید" href="#"  title="کانال تلگرام ما را دنبال کنید" target="_blank">
+                                    <span class="dina-social-button dina-socialbtn-one fab fa-telegram-plane" aria-hidden="true"></span>
+                            </a>
+            
+        
+    </div>
+
+<script type="application/ld+json">{"@context":"https://schema.org/","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"item":{"name":"\u062e\u0627\u0646\u0647","@id":"https://tastebox.ir"}},{"@type":"ListItem","position":2,"item":{"name":"\u062e\u0631\u06cc\u062f \u0627\u06cc\u0646\u062a\u0631\u0646\u062a \u0641\u06cc\u0628\u0631 \u0646\u0648\u0631\u06cc \u0645\u062e\u0627\u0628\u0631\u0627\u062a FTTH","@id":"https://tastebox.ir/ftth/"}}]}</script>						<script>
+				const lazyloadRunObserver = () => {
+					const lazyloadBackgrounds = document.querySelectorAll( `.e-con.e-parent:not(.e-lazyloaded)` );
+					const lazyloadBackgroundObserver = new IntersectionObserver( ( entries ) => {
+						entries.forEach( ( entry ) => {
+							if ( entry.isIntersecting ) {
+								let lazyloadBackground = entry.target;
+								if( lazyloadBackground ) {
+									lazyloadBackground.classList.add( 'e-lazyloaded' );
+								}
+								lazyloadBackgroundObserver.unobserve( entry.target );
+							}
+						});
+					}, { rootMargin: '200px 0px 200px 0px' } );
+					lazyloadBackgrounds.forEach( ( lazyloadBackground ) => {
+						lazyloadBackgroundObserver.observe( lazyloadBackground );
+					} );
+				};
+				const events = [
+					'DOMContentLoaded',
+					'elementor/lazyload/observe',
+				];
+				events.forEach( ( event ) => {
+					document.addEventListener( event, lazyloadRunObserver );
+				} );
+			</script>
+				<script>
+		(function () {
+			var c = document.body.className;
+			c = c.replace(/woocommerce-no-js/, 'woocommerce-js');
+			document.body.className = c;
+		})();
+	</script>
+	<script type="text/template" id="tmpl-variation-template">
+	<div class="woocommerce-variation-description">{{{ data.variation.variation_description }}}</div>
+	<div class="woocommerce-variation-price">{{{ data.variation.price_html }}}</div>
+	<div class="woocommerce-variation-availability">{{{ data.variation.availability_html }}}</div>
+</script>
+<script type="text/template" id="tmpl-unavailable-variation-template">
+	<p role="alert">با عرض پوزش، این محصول در دسترس نیست. خواهشمندیمً ترکیب دیگری را انتخاب کنید.</p>
+</script>
+<link rel='stylesheet' id='wc-blocks-style-rtl-css' href='https://tastebox.ir/wp-content/plugins/woocommerce/assets/client/blocks/wc-blocks-rtl.css?ver=wc-10.9.3' media='all' />
+<link rel='stylesheet' id='redux-custom-fonts-css' href='//tastebox.ir/wp-content/uploads/redux/custom-fonts/fonts.css?ver=1784055175' media='all' />
+<script id="dina-js-dark-js" src="https://tastebox.ir/wp-content/themes/dinakala/js/dark-theme.js?ver=6.9"></script>
+<script id="dina-js-boot-js" src="https://tastebox.ir/wp-content/themes/dinakala/js/bootstrap.min.js?ver=6.9"></script>
+<script id="dina-js-main-js" src="https://tastebox.ir/wp-content/themes/dinakala/js/main.js?ver=6.9"></script>
+<script id="dina-js-owl-js" src="https://tastebox.ir/wp-content/themes/dinakala/js/owl-carousel.js?ver=6.9"></script>
+<script id="dina-js-simple-lightbox-js" src="https://tastebox.ir/wp-content/themes/dinakala/js/simpleLightbox.min.js?ver=6.9"></script>
+<script id="dina-js-theme-js-extra">
+var dinaJsTheme = {"i18n":{"seconds":"\u062b\u0627\u0646\u06cc\u0647","minutes":"\u062f\u0642\u06cc\u0642\u0647","hours":"\u0633\u0627\u0639\u062a","days":"\u0631\u0648\u0632","weeks":"\u0647\u0641\u062a\u0647","dinaSavingText":"\u0633\u0648\u062f \u0634\u0645\u0627 \u0627\u0632 \u062e\u0631\u06cc\u062f:"}};
+var dina_ajax_tab_object = {"ajax_url":"https://tastebox.ir/wp-admin/admin-ajax.php","nonce":"2fc1417d6b"};
+//# sourceURL=dina-js-theme-js-extra
+</script>
+<script id="dina-js-theme-js" src="https://tastebox.ir/wp-content/themes/dinakala/js/theme.js?ver=6.9"></script>
+<script async data-wp-strategy="async" fetchpriority="low" id="comment-reply-js" src="https://tastebox.ir/wp-includes/js/comment-reply.min.js?ver=7.0.1"></script>
+<script id="jquery-selectBox-js" src="https://tastebox.ir/wp-content/plugins/yith-woocommerce-wishlist/assets/js/jquery.selectBox.min.js?ver=1.2.0"></script>
+<script data-wp-strategy="defer" id="wc-prettyPhoto-js" src="//tastebox.ir/wp-content/plugins/woocommerce/assets/js/prettyPhoto/jquery.prettyPhoto.min.js?ver=3.1.6"></script>
+<script id="jquery-yith-wcwl-js-extra">
+var yith_wcwl_l10n = {"ajax_url":"/wp-admin/admin-ajax.php","redirect_to_cart":"no","yith_wcwl_button_position":"add-to-cart","multi_wishlist":"","hide_add_button":"1","enable_ajax_loading":"","ajax_loader_url":"https://tastebox.ir/wp-content/plugins/yith-woocommerce-wishlist/assets/images/ajax-loader-alt.svg","remove_from_wishlist_after_add_to_cart":"1","is_wishlist_responsive":"1","time_to_close_prettyphoto":"3000","fragments_index_glue":".","reload_on_found_variation":"1","mobile_media_query":"768","labels":{"cookie_disabled":"\u0645\u062a\u0627\u0633\u0641\u06cc\u0645\u060c \u0644\u06cc\u0633\u062a \u0639\u0644\u0627\u0642\u0647 \u0645\u0646\u062f\u06cc \u0632\u0645\u0627\u0646\u06cc \u0622\u0645\u0627\u062f\u0647 \u0627\u0633\u062a \u06a9\u0647 \u0634\u0645\u0627 \u06a9\u0648\u06a9\u06cc \u0645\u0631\u0648\u06af\u0631\u062a\u0648\u0646 \u0631\u0627 \u0641\u0639\u0627\u0644 \u06a9\u0631\u062f\u0647 \u0628\u0627\u0634\u06cc\u062f.","added_to_cart_message":"\u003Cdiv class=\"woocommerce-notices-wrapper\"\u003E\u003Cdiv class=\"woocommerce-message\" role=\"alert\"\u003E\u0645\u062d\u0635\u0648\u0644\u0627\u062a \u0628\u0627 \u0645\u0648\u0641\u0642\u06cc\u062a \u0628\u0647 \u0633\u0628\u062f \u062e\u0631\u06cc\u062f\u062a\u0627\u0646 \u0627\u0636\u0627\u0641\u0647 \u0634\u062f\u0646\u062f\u003C/div\u003E\u003C/div\u003E"},"actions":{"add_to_wishlist_action":"add_to_wishlist","remove_from_wishlist_action":"remove_from_wishlist","reload_wishlist_and_adding_elem_action":"reload_wishlist_and_adding_elem","load_mobile_action":"load_mobile","delete_item_action":"delete_item","save_title_action":"save_title","save_privacy_action":"save_privacy","load_fragments":"load_fragments"},"nonce":{"add_to_wishlist_nonce":"3bbc4fa5b0","remove_from_wishlist_nonce":"412cefa6aa","reload_wishlist_and_adding_elem_nonce":"3f73722c43","load_mobile_nonce":"3bfffbec23","delete_item_nonce":"6abb7a87b4","save_title_nonce":"7738f2a311","save_privacy_nonce":"5754ad18cb","load_fragments_nonce":"993c9f319f"},"redirect_after_ask_estimate":"","ask_estimate_redirect_url":"https://tastebox.ir"};
+//# sourceURL=jquery-yith-wcwl-js-extra
+</script>
+<script id="jquery-yith-wcwl-js" src="https://tastebox.ir/wp-content/plugins/yith-woocommerce-wishlist/assets/js/jquery.yith-wcwl.min.js?ver=4.16.0"></script>
+<script id="jquery-yith-wcwl-js-after">
+jQuery( function( $ ) {
+            $( document ).on( 'added_to_wishlist removed_from_wishlist', function() {
+              $.get( yith_wcwl_l10n.ajax_url, {
+                action: 'yith_wcwl_update_wishlist_count'
+              }, function( data ) {
+                $( '.dina-yith-wcwl-btn .dina-wish-amount' ).html( data.count );
+              } );
+            } );
+          } );
+        
+//# sourceURL=jquery-yith-wcwl-js-after
+</script>
+<script id="wp-hooks-js" src="https://tastebox.ir/wp-includes/js/dist/hooks.min.js?ver=7496969728ca0f95732d"></script>
+<script id="wp-i18n-js" src="https://tastebox.ir/wp-includes/js/dist/i18n.min.js?ver=781d11515ad3d91786ec"></script>
+<script id="wp-i18n-js-after">
+wp.i18n.setLocaleData( { 'text direction\u0004ltr': [ 'rtl' ] } );
+//# sourceURL=wp-i18n-js-after
+</script>
+<script id="swv-js" src="https://tastebox.ir/wp-content/plugins/contact-form-7/includes/swv/js/index.js?ver=6.1.6"></script>
+<script id="contact-form-7-js-translations">
+( function( domain, translations ) {
+	var localeData = translations.locale_data[ domain ] || translations.locale_data.messages;
+	localeData[""].domain = domain;
+	wp.i18n.setLocaleData( localeData, domain );
+} )( "contact-form-7", {"translation-revision-date":"2026-02-08 09:46:30+0000","generator":"GlotPress\/4.0.3","domain":"messages","locale_data":{"messages":{"":{"domain":"messages","plural-forms":"nplurals=1; plural=0;","lang":"fa"},"This contact form is placed in the wrong place.":["\u0627\u06cc\u0646 \u0641\u0631\u0645 \u062a\u0645\u0627\u0633 \u062f\u0631 \u062c\u0627\u06cc \u0627\u0634\u062a\u0628\u0627\u0647\u06cc \u0642\u0631\u0627\u0631 \u062f\u0627\u062f\u0647 \u0634\u062f\u0647 \u0627\u0633\u062a."],"Error:":["\u062e\u0637\u0627:"]}},"comment":{"reference":"includes\/js\/index.js"}} );
+//# sourceURL=contact-form-7-js-translations
+</script>
+<script id="contact-form-7-js-before">
+var wpcf7 = {
+    "api": {
+        "root": "https:\/\/tastebox.ir\/wp-json\/",
+        "namespace": "contact-form-7\/v1"
+    },
+    "cached": 1
+};
+//# sourceURL=contact-form-7-js-before
+</script>
+<script id="contact-form-7-js" src="https://tastebox.ir/wp-content/plugins/contact-form-7/includes/js/index.js?ver=6.1.6"></script>
+<script id="underscore-js" src="https://tastebox.ir/wp-includes/js/underscore.min.js?ver=1.13.8"></script>
+<script id="wp-util-js-extra">
+var _wpUtilSettings = {"ajax":{"url":"/wp-admin/admin-ajax.php"}};
+//# sourceURL=wp-util-js-extra
+</script>
+<script id="wp-util-js" src="https://tastebox.ir/wp-includes/js/wp-util.min.js?ver=7.0.1"></script>
+<script id="wp-api-request-js-extra">
+var wpApiSettings = {"root":"https://tastebox.ir/wp-json/","nonce":"8165223a1d","versionString":"wp/v2/"};
+//# sourceURL=wp-api-request-js-extra
+</script>
+<script id="wp-api-request-js" src="https://tastebox.ir/wp-includes/js/api-request.min.js?ver=7.0.1"></script>
+<script id="wp-url-js" src="https://tastebox.ir/wp-includes/js/dist/url.min.js?ver=bb0f766c3d2efe497871"></script>
+<script id="wp-api-fetch-js-translations">
+( function( domain, translations ) {
+	var localeData = translations.locale_data[ domain ] || translations.locale_data.messages;
+	localeData[""].domain = domain;
+	wp.i18n.setLocaleData( localeData, domain );
+} )( "default", {"translation-revision-date":"2026-06-16 11:52:40+0000","generator":"GlotPress\/4.0.3","domain":"messages","locale_data":{"messages":{"":{"domain":"messages","plural-forms":"nplurals=1; plural=0;","lang":"fa"},"Could not get a valid response from the server.":["\u0646\u062a\u0648\u0627\u0646\u0633\u062a\u06cc\u0645 \u06cc\u06a9 \u067e\u0627\u0633\u062e \u0645\u0639\u062a\u0628\u0631 \u0627\u0632 \u0633\u0631\u0648\u0631 \u062f\u0631\u06cc\u0627\u0641\u062a \u06a9\u0646\u06cc\u0645."],"Unable to connect. Please check your Internet connection.":["\u0642\u0627\u062f\u0631 \u0646\u06cc\u0633\u062a\u06cc\u0645 \u062a\u0627 \u0648\u0635\u0644 \u0634\u0648\u06cc\u0645. \u0644\u0637\u0641\u0627\u064b \u0627\u062a\u0635\u0627\u0644 \u0627\u06cc\u0646\u062a\u0631\u0646\u062a \u062e\u0648\u062f \u0631\u0627 \u0628\u0631\u0631\u0633\u06cc \u0646\u0645\u0627\u06cc\u06cc\u062f."],"Media upload failed. If this is a photo or a large image, please scale it down and try again.":["\u0628\u0627\u0631\u06af\u0630\u0627\u0631\u06cc \u0631\u0633\u0627\u0646\u0647 \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062f. \u0627\u06af\u0631 \u0627\u0646\u062f\u0627\u0632\u0647 \u0627\u06cc\u0646 \u0639\u06a9\u0633 \u06cc\u0627 \u062a\u0635\u0648\u06cc\u0631 \u0628\u0632\u0631\u06af \u0627\u0633\u062a\u060c \u0644\u0637\u0641\u0627 \u0645\u0642\u06cc\u0627\u0633 \u0622\u0646\u200c\u0631\u0627 \u067e\u0627\u06cc\u06cc\u0646 \u0628\u06cc\u0627\u0648\u0631\u06cc\u062f \u0648 \u062f\u0648\u0628\u0627\u0631\u0647 \u062a\u0644\u0627\u0634 \u0646\u0645\u0627\u06cc\u06cc\u062f."],"The response is not a valid JSON response.":["\u067e\u0627\u0633\u062e \u06cc\u06a9 \u067e\u0627\u0633\u062e JSON \u0645\u0639\u062a\u0628\u0631 \u0646\u06cc\u0633\u062a."]}},"comment":{"reference":"wp-includes\/js\/dist\/api-fetch.js"}} );
+//# sourceURL=wp-api-fetch-js-translations
+</script>
+<script id="wp-api-fetch-js" src="https://tastebox.ir/wp-includes/js/dist/api-fetch.min.js?ver=d7efe4dc1468d36c39b8"></script>
+<script id="wp-api-fetch-js-after">
+wp.apiFetch.use( wp.apiFetch.createRootURLMiddleware( "https://tastebox.ir/wp-json/" ) );
+wp.apiFetch.nonceMiddleware = wp.apiFetch.createNonceMiddleware( "8165223a1d" );
+wp.apiFetch.use( wp.apiFetch.nonceMiddleware );
+wp.apiFetch.use( wp.apiFetch.mediaUploadMiddleware );
+wp.apiFetch.nonceEndpoint = "https://tastebox.ir/wp-admin/admin-ajax.php?action=rest-nonce";
+//# sourceURL=wp-api-fetch-js-after
+</script>
+<script id="wp-polyfill-js" src="https://tastebox.ir/wp-includes/js/dist/vendor/wp-polyfill.min.js?ver=3.15.0"></script>
+<script id="woo-variation-swatches-js-extra">
+var woo_variation_swatches_options = {"show_variation_label":"","clear_on_reselect":"","variation_label_separator":":","is_mobile":"","show_variation_stock":"","stock_label_threshold":"5","cart_redirect_after_add":"no","enable_ajax_add_to_cart":"yes","cart_url":"https://tastebox.ir/cart/","is_cart":""};
+//# sourceURL=woo-variation-swatches-js-extra
+</script>
+<script id="woo-variation-swatches-js" src="https://tastebox.ir/wp-content/plugins/woo-variation-swatches/assets/js/frontend.min.js?ver=2.3.0"></script>
+<script id="dina-ajax-login-js-extra">
+var ajax_login_object = {"ajaxurl":"https://tastebox.ir/wp-admin/admin-ajax.php","loadingmessage":"\u0644\u0637\u0641\u0627 \u0635\u0628\u0631 \u06a9\u0646\u06cc\u062f ..."};
+var ajax_register_object = {"ajaxurl":"https://tastebox.ir/wp-admin/admin-ajax.php","loadingmessage":"\u0644\u0637\u0641\u0627 \u0635\u0628\u0631 \u06a9\u0646\u06cc\u062f ..."};
+//# sourceURL=dina-ajax-login-js-extra
+</script>
+<script id="dina-ajax-login-js" src="https://tastebox.ir/wp-content/themes/dinakala/includes/classes/assets/ajax-login-script.js?ver=6.9"></script>
+<script id="dina-ajax-script-js-extra">
+var dinaproduct = {"ajaxurl":"https://tastebox.ir/wp-admin/admin-ajax.php","security":"a980fffc4b"};
+//# sourceURL=dina-ajax-script-js-extra
+</script>
+<script id="dina-ajax-script-js" src="https://tastebox.ir/wp-content/themes/dinakala/js/dina-ajax.js?ver=6.9"></script>
+<script id="dina-mini-cart-ajax-js-extra">
+var dina_mini_cart_ajax_object = {"ajax_url":"https://tastebox.ir/wp-admin/admin-ajax.php","nonce":"12ad2c832f"};
+//# sourceURL=dina-mini-cart-ajax-js-extra
+</script>
+<script id="dina-mini-cart-ajax-js" src="https://tastebox.ir/wp-content/themes/dinakala/js/mini-cart.js?ver=6.9"></script>
+<script id="sourcebuster-js-js" src="https://tastebox.ir/wp-content/plugins/woocommerce/assets/js/sourcebuster/sourcebuster.min.js?ver=10.9.3"></script>
+<script id="wc-order-attribution-js-extra">
+var wc_order_attribution = {"params":{"lifetime":1.0000000000000001e-5,"session":30,"base64":false,"ajaxurl":"https://tastebox.ir/wp-admin/admin-ajax.php","prefix":"wc_order_attribution_","allowTracking":true},"fields":{"source_type":"current.typ","referrer":"current_add.rf","utm_campaign":"current.cmp","utm_source":"current.src","utm_medium":"current.mdm","utm_content":"current.cnt","utm_id":"current.id","utm_term":"current.trm","utm_source_platform":"current.plt","utm_creative_format":"current.fmt","utm_marketing_tactic":"current.tct","session_entry":"current_add.ep","session_start_time":"current_add.fd","session_pages":"session.pgs","session_count":"udata.vst","user_agent":"udata.uag"}};
+//# sourceURL=wc-order-attribution-js-extra
+</script>
+<script id="wc-order-attribution-js" src="https://tastebox.ir/wp-content/plugins/woocommerce/assets/js/frontend/order-attribution.min.js?ver=10.9.3"></script>
+<script id="swp-live-search-client-js-extra">
+var searchwp_live_search_params = [];
+searchwp_live_search_params = {"ajaxurl":"https:\/\/tastebox.ir\/wp-admin\/admin-ajax.php","config":{"default":{"engine":"default","input":{"delay":"400","min_chars":"2"},"results":{"position":"bottom","width":"auto","offset":{"x":0,"y":5}},"spinner":{"lines":10,"length":8,"width":4,"radius":8,"corners":1,"rotate":0,"direction":1,"color":"#000","speed":1,"trail":60,"shadow":false,"hwaccel":false,"className":"spinner","zIndex":2000000000,"top":"50%","left":"50%"}}},"msg_no_config_found":"\u062a\u0646\u0638\u06cc\u0645\u0627\u062a \u0645\u0639\u062a\u0628\u0631\u06cc \u0628\u0631\u0627\u06cc \u0627\u0641\u0632\u0648\u0646\u0647 \u062c\u0633\u062a\u062c\u0648\u06cc \u0632\u0646\u062f\u0647 \u0648\u0631\u062f\u067e\u0631\u0633 \u067e\u06cc\u062f\u0627 \u0646\u0634\u062f!","aria_instructions":"\u0647\u0646\u06af\u0627\u0645\u06cc \u06a9\u0647 \u0646\u062a\u0627\u06cc\u062c \u062a\u06a9\u0645\u06cc\u0644 \u062e\u0648\u062f\u06a9\u0627\u0631 \u0646\u0645\u0627\u06cc\u0634 \u062f\u0627\u062f\u0647 \u0645\u06cc\u0634\u0648\u062f \u0628\u0627 \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0627\u0632 \u06a9\u0644\u06cc\u062f\u0647\u0627\u06cc \u0628\u0627\u0644\u0627 \u0648 \u067e\u0627\u06cc\u06cc\u0646 \u0645\u06cc \u062a\u0648\u0627\u0646\u06cc\u062f \u0628\u0647 \u06af\u0632\u06cc\u0646\u0647 \u0645\u0648\u0631\u062f \u0646\u0638\u0631 \u0648 \u0635\u0641\u062d\u0647 \u0645\u0648\u0631\u062f \u0646\u0638\u0631 \u0628\u0631\u0648\u06cc\u062f. \u06a9\u0627\u0631\u0628\u0631\u0627\u0646 \u062f\u0633\u062a\u06af\u0627\u0647 \u0644\u0645\u0633\u06cc\u060c \u062a\u0648\u0633\u0637 \u0644\u0645\u0633 \u0648 \u062d\u0631\u06a9\u062a \u0647\u0627\u06cc \u062a\u0631\u06a9\u06cc\u0628\u06cc \u0645\u06cc \u062a\u0648\u0627\u0646\u0646\u062f \u067e\u06cc\u0645\u0627\u06cc\u0634 \u06a9\u0646\u0646\u062f."};;
+//# sourceURL=swp-live-search-client-js-extra
+</script>
+<script id="swp-live-search-client-js" src="https://tastebox.ir/wp-content/themes/dinakala/includes/searchwp-live-ajax-search/assets/javascript/build/searchwp-live-search.min.js?ver=1.3.1"></script>
+<script id="pDate-js" src="https://tastebox.ir/wp-content/plugins/elementor-pro/megatheme/includes/assets/js/persian-date.min.js"></script>
+<script id="pDatepicker-js" src="https://tastebox.ir/wp-content/plugins/elementor-pro/megatheme/includes/assets/js/persian-datepicker.min.js"></script>
+<script id="pDatepickerLoader-js" src="https://tastebox.ir/wp-content/plugins/elementor-pro/megatheme/includes/assets/js/persian-datepicker-loader.js"></script>
+<script id="wc-cart-fragments-js-extra">
+var wc_cart_fragments_params = {"ajax_url":"/wp-admin/admin-ajax.php","wc_ajax_url":"/?wc-ajax=%%endpoint%%","cart_hash_key":"wc_cart_hash_9cad34ad23749145fb4c4b2fee428896","fragment_name":"wc_fragments_9cad34ad23749145fb4c4b2fee428896","request_timeout":"5000"};
+//# sourceURL=wc-cart-fragments-js-extra
+</script>
+<script data-wp-strategy="defer" defer id="wc-cart-fragments-js" src="https://tastebox.ir/wp-content/plugins/woocommerce/assets/js/frontend/cart-fragments.min.js?ver=10.9.3"></script>
+<script id="wc-add-to-cart-variation-js-extra">
+var wc_add_to_cart_variation_params = {"wc_ajax_url":"/?wc-ajax=%%endpoint%%","i18n_no_matching_variations_text":"\u0628\u0627 \u0639\u0631\u0636 \u067e\u0648\u0632\u0634\u060c \u0647\u06cc\u0686 \u0645\u062d\u0635\u0648\u0644\u06cc \u0645\u0637\u0627\u0628\u0642 \u0627\u0646\u062a\u062e\u0627\u0628 \u0634\u0645\u0627 \u06cc\u0627\u0641\u062a \u0646\u0634\u062f. \u062e\u0648\u0627\u0647\u0634\u0645\u0646\u062f\u06cc\u0645\u064b \u062a\u0631\u06a9\u06cc\u0628 \u062f\u06cc\u06af\u0631\u06cc \u0631\u0627 \u0627\u0646\u062a\u062e\u0627\u0628 \u06a9\u0646\u06cc\u062f.","i18n_make_a_selection_text":"\u0642\u0628\u0644 \u0627\u0632 \u0627\u06cc\u0646 \u06a9\u0647 \u0627\u06cc\u0646 \u0645\u062d\u0635\u0648\u0644 \u0628\u0647 \u0633\u0628\u062f \u062e\u0631\u06cc\u062f \u062e\u0648\u062f \u0627\u0636\u0627\u0641\u0647 \u06a9\u0646\u06cc\u062f \u06af\u0632\u06cc\u0646\u0647\u200c\u0647\u0627\u06cc \u0645\u062d\u0635\u0648\u0644 \u0631\u0627 \u0627\u0646\u062a\u062e\u0627\u0628 \u06a9\u0646\u06cc\u062f.","i18n_unavailable_text":"\u0628\u0627 \u0639\u0631\u0636 \u067e\u0648\u0632\u0634\u060c \u0627\u06cc\u0646 \u0645\u062d\u0635\u0648\u0644 \u062f\u0631 \u062f\u0633\u062a\u0631\u0633 \u0646\u06cc\u0633\u062a. \u062e\u0648\u0627\u0647\u0634\u0645\u0646\u062f\u06cc\u0645\u064b \u062a\u0631\u06a9\u06cc\u0628 \u062f\u06cc\u06af\u0631\u06cc \u0631\u0627 \u0627\u0646\u062a\u062e\u0627\u0628 \u06a9\u0646\u06cc\u062f.","i18n_reset_alert_text":"Your selection has been reset. Please select some product options before adding this product to your cart."};
+//# sourceURL=wc-add-to-cart-variation-js-extra
+</script>
+<script data-wp-strategy="defer" id="wc-add-to-cart-variation-js" src="https://tastebox.ir/wp-content/plugins/woocommerce/assets/js/frontend/add-to-cart-variation.min.js?ver=10.9.3"></script>
+<script id="wc-add-to-cart-variation-js-after">
+jQuery(function ($) { $(document).on('show_variation', function (event, variation, purchasable) { if(variation.cashback_amount) { $('.on-woo-wallet-cashback').show(); $('.on-woo-wallet-cashback').html(variation.cashback_html); } else { $('.on-woo-wallet-cashback').hide(); } }) });
+//# sourceURL=wc-add-to-cart-variation-js-after
+</script>
+<script id="wc-single-product-js-extra">
+var wc_single_product_params = {"i18n_required_rating_text":"\u062e\u0648\u0627\u0647\u0634\u0645\u0646\u062f\u06cc\u0645 \u06cc\u06a9 \u0631\u062a\u0628\u0647 \u0631\u0627 \u0627\u0646\u062a\u062e\u0627\u0628 \u06a9\u0646\u06cc\u062f","i18n_rating_options":["1 of 5 stars","2 of 5 stars","3 of 5 stars","4 of 5 stars","5 of 5 stars"],"i18n_product_gallery_trigger_text":"\u0645\u0634\u0627\u0647\u062f\u0647 \u06af\u0627\u0644\u0631\u06cc \u062a\u0635\u0627\u0648\u06cc\u0631 \u062f\u0631 \u062d\u0627\u0644\u062a \u062a\u0645\u0627\u0645 \u0635\u0641\u062d\u0647","review_rating_required":"yes","flexslider":{"rtl":true,"animation":"slide","smoothHeight":true,"directionNav":false,"controlNav":"thumbnails","slideshow":false,"animationSpeed":500,"animationLoop":false,"allowOneSlide":false},"zoom_enabled":"1","zoom_options":[],"photoswipe_enabled":"1","photoswipe_options":{"shareEl":false,"closeOnScroll":false,"history":false,"hideAnimationDuration":0,"showAnimationDuration":0},"flexslider_enabled":"1"};
+//# sourceURL=wc-single-product-js-extra
+</script>
+<script data-wp-strategy="defer" defer id="wc-single-product-js" src="https://tastebox.ir/wp-content/plugins/woocommerce/assets/js/frontend/single-product.min.js?ver=10.9.3"></script>
+    
+</body>
+</html>
+
+<!-- Page supported by LiteSpeed Cache 7.8.1 on 2026-07-21 23:16:54 -->
